@@ -87,7 +87,12 @@ def _summary(address: str, chain: str, raw: dict, budget_usd: float) -> dict:
         "status": raw["status"],
         "realized_pnl_usd": matched.get("realized_pnl_usd", pnl.get("lifetime_realized_pnl_usd")),
         "unrealized_pnl_usd": pnl.get("lifetime_unrealized_pnl_usd"),
-        "total_pnl_usd": round((matched.get("realized_pnl_usd") or pnl.get("lifetime_realized_pnl_usd") or 0) + (pnl.get("lifetime_unrealized_pnl_usd") or 0), 2),
+        "total_pnl_usd": (
+            None
+            if pnl.get("pnl_reliable") is False
+            else round((matched.get("realized_pnl_usd") or pnl.get("lifetime_realized_pnl_usd") or 0) + (pnl.get("lifetime_unrealized_pnl_usd") or 0), 2)
+        ),
+        "pnl_reliable": pnl.get("pnl_reliable", True),
         "win_rate": matched.get("win_rate") if matched.get("trades") else pnl.get("win_rate_tokens"),
         "trades": matched.get("trades") or pnl.get("total_buys", 0) + pnl.get("total_sells", 0),
         "active_chains": pnl.get("active_networks") or [],

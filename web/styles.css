@@ -33,3 +33,4 @@
 .perf-stats{display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--text-muted);font-size:10px;text-transform:none;letter-spacing:0}
 .perf-stats i{font-style:normal}
 .perf-stats i:not(:first-child)::before{content:'· ';color:var(--border)}
+.live-label.stopped{color:var(--text-muted)}

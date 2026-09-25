@@ -6,6 +6,11 @@ from datetime import datetime, timezone
 
 STABLES = {"USDC", "USDT", "DAI", "USDG", "USDS", "USDE", "PYUSD", "FDUSD", "TUSD", "USD1", "USDC.E", "USDBC", "LUSD", "FRAX", "GHO", "RLUSD"}
 
+# A wallet's lifetime realized or unrealized PnL past this is treated as unreliable, not displayed as
+# a number. Broken/rug tokens can report an arbitrarily large fake price; a real wallet's PnL doesn't
+# reach nine or more figures from genuine trading. Generous on purpose, so no real trader gets capped.
+PNL_SANITY_CEILING_USD = 25_000_000
+
 
 def _f(x, default=None):
     """float(x), or default if x is missing or not a number."""
@@ -141,15 +146,23 @@ def pnl_features(attrs: dict | None) -> dict:
     def _disagrees(raw: float, clean: float) -> bool:
         return abs(raw) > max(abs(clean) * 10, 1_000_000) and abs(raw - clean) > 1_000_000
     use_clean = outliers_excluded > 0 or _disagrees(raw_realized, realized_clean) or _disagrees(raw_unrealized, unrealized_clean)
+    realized_best = realized_clean if use_clean else raw_realized
+    unrealized_best = unrealized_clean if use_clean else raw_unrealized
+    # Final backstop: even the "cleaned" number can still be absurd if several borderline positions
+    # each individually dodged the per-token filter above. Nothing a wallet actually trades is worth
+    # more than this in practice; past it we show "unreliable" rather than any number at all, since a
+    # wrong-but-plausible-looking correction is worse than an honest gap.
+    reliable = abs(realized_best) <= PNL_SANITY_CEILING_USD and abs(unrealized_best) <= PNL_SANITY_CEILING_USD
     return {
         "available": True,
         "tokens_traded": attrs.get("total_tokens"),
         "tokens_in_sample": len(stats),
         "tokens_sold": len(sold),
-        "lifetime_realized_pnl_usd": round(realized_clean, 0) if use_clean else raw_realized,
-        "lifetime_unrealized_pnl_usd": round(unrealized_clean, 0) if use_clean else raw_unrealized,
+        "lifetime_realized_pnl_usd": round(realized_best, 0) if reliable else None,
+        "lifetime_unrealized_pnl_usd": round(unrealized_best, 0) if reliable else None,
         "lifetime_realized_pnl_usd_raw": raw_realized,
         "lifetime_unrealized_pnl_usd_raw": raw_unrealized,
+        "pnl_reliable": reliable,
         "pnl_outliers_excluded": outliers_excluded,
         "win_rate_tokens": round(len(wins) / len(sold), 3) if sold else None,
         "profit_concentration": round(max(positive) / sum(positive), 3) if positive else None,
