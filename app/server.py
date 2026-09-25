@@ -42,10 +42,11 @@ CHAIN_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,60}$")
 ADDR_RE = re.compile(r"^[A-Za-z0-9]{20,90}$")
 log = logging.getLogger("app.server")
 
+MAX_CONCURRENT_FOLLOW_RUNS = 8
+
 state: dict = {
     "capabilities": None,
-    "follow": None,
-    "follow_task": None,
+    "follow_runs": {},  # run_id -> {"engine": FollowEngine, "task": asyncio.Task, "run_dir": Path}
     "last_scan": None,
     "last_profiles": {},
     "jobs": {},
@@ -59,9 +60,9 @@ async def lifespan(app: FastAPI):
     state["capabilities"] = await probe_capabilities(app.state.client)
     state["store"] = Store("state.db")
     yield
-    for key in ("follow_task",):
-        if state.get(key):
-            state[key].cancel()
+    for run in state["follow_runs"].values():
+        if run.get("task"):
+            run["task"].cancel()
     if state.get("autopilot") and state["autopilot"].get("task"):
         state["autopilot"]["task"].cancel()
     state["store"].close()
@@ -185,12 +186,12 @@ def api_config():
 
 @app.get("/api/stats")
 def api_stats():
-    engine = state.get("follow")
+    runs_ = state["follow_runs"].values()
     pilot = state.get("autopilot") or {}
     return {
         "credits_used": app.state.client.credits_used,
-        "following": bool(state.get("follow_task") and not state["follow_task"].done()),
-        "follow_polls": engine.polls if engine else 0,
+        "following": any(not r["task"].done() for r in runs_ if r.get("task")),
+        "follow_polls": sum(r["engine"].polls for r in runs_),
         "autopilot": bool(pilot.get("task") and not pilot["task"].done()),
     }
 
@@ -310,6 +311,33 @@ async def api_scan(body: dict):
         result = await scan.scan(app.state.client, chain, source, n_tokens)
     except PlanRestrictedError:
         return locked("This source needs a higher plan.", upgrade_url())
+    except CoinGeckoError as e:
+        return JSONResponse({"unavailable": True, "status": e.status, "chain": chain}, status_code=200)
+    result["candidates"] = result["candidates"][:150]
+    result["batch"] = secrets.token_hex(5)
+    result["credits"] = app.state.client.credits_used - credits0
+    result["elapsed_ms"] = round((time.perf_counter() - t0) * 1000)
+    state["last_scan"] = result
+    return result
+
+
+@app.post("/api/scan/tokens")
+async def api_scan_tokens(body: dict):
+    """Runs the wallet-recurrence scan against a hand-picked set of tokens (from search), instead of
+    a trending source. Lets a user say "radar these specific tokens" rather than only "radar what's
+    trending right now"."""
+    if not caps().get("analyst"):
+        return locked("Scan needs the top_traders endpoint (Analyst plan or higher).", upgrade_url())
+    chain = _chain(body.get("chain", config.DEFAULT_CHAIN))
+    picked = [t for t in (body.get("tokens") or []) if t.get("address")][:20]
+    if not picked:
+        raise HTTPException(400, "pick at least one token first")
+    credits0 = app.state.client.credits_used
+    t0 = time.perf_counter()
+    try:
+        result = await scan.scan_tokens(app.state.client, chain, picked)
+    except PlanRestrictedError:
+        return locked("This needs a higher plan.", upgrade_url())
     except CoinGeckoError as e:
         return JSONResponse({"unavailable": True, "status": e.status, "chain": chain}, status_code=200)
     result["candidates"] = result["candidates"][:150]
@@ -453,8 +481,6 @@ def api_follow_add(body: dict):
         }
     )
     _save_follow_list(items)
-    if state.get("follow") and state.get("follow_task") and not state["follow_task"].done():
-        state["follow"].targets.append({"address": address, "chain": chain})
     return items
 
 
@@ -463,8 +489,6 @@ def api_follow_remove(body: dict):
     address = (body.get("address") or "").lower()
     items = [f for f in follow_list() if f["address"].lower() != address]
     _save_follow_list(items)
-    if state.get("follow"):
-        state["follow"].targets = [t for t in state["follow"].targets if t["address"].lower() != address]
     return items
 
 
@@ -507,22 +531,38 @@ def api_follow_autopick(body: dict | None = None):
     return {"picked": picked, "list": list(items.values())}
 
 
+def _assumptions_overrides(body: dict) -> dict:
+    """Merges any per-run assumption overrides in the request body over the saved defaults."""
+    current = dict(load_assumptions())
+    overrides = body.get("assumptions") or {}
+    for k in ("slippage_bps", "fee_bps", "starting_cash", "max_position_pct"):
+        if k in overrides and overrides[k] not in (None, ""):
+            try:
+                current[k] = float(overrides[k])
+            except (TypeError, ValueError):
+                raise HTTPException(400, f"{k} must be a number")
+    return current
+
+
 @app.post("/api/follow/start")
 async def api_follow_start(body: dict):
     if not caps().get("analyst"):
         return locked("Following wallets needs the wallet endpoints (Analyst plan or higher).", upgrade_url())
-    if state.get("follow_task") and not state["follow_task"].done():
-        raise HTTPException(400, "already following; stop first")
+    live = sum(1 for r in state["follow_runs"].values() if r.get("task") and not r["task"].done())
+    if live >= MAX_CONCURRENT_FOLLOW_RUNS:
+        raise HTTPException(400, f"{MAX_CONCURRENT_FOLLOW_RUNS} paper runs are already live; stop one before starting another")
     chain = _chain(body.get("chain", config.DEFAULT_CHAIN))
     addresses = body.get("addresses") or [{"address": f["address"], "chain": f["chain"]} for f in follow_list()]
     if not addresses:
         raise HTTPException(400, "follow at least one wallet first")
-    budget = float(body.get("budget", config.DEFAULT_BUDGET_USD))
+    assumptions = _assumptions_overrides(body)
+    budget = float(body.get("budget", assumptions.get("starting_cash", config.DEFAULT_BUDGET_USD)))
     poll_s = max(10.0, float(body.get("poll_s", config.DEFAULT_FOLLOW_POLL_S)))
-    engine = FollowEngine(app.state.client, chain, addresses, budget, load_assumptions(), poll_s)
-    state["follow"] = engine
-    state["run_dir"] = runs.new_run_dir("forward")
-    run_dir = state["run_dir"]
+    label = (body.get("label") or "").strip()[:60] or None
+    run_id = secrets.token_hex(4)
+    engine = FollowEngine(app.state.client, chain, addresses, budget, assumptions, poll_s, label=label)
+    run_dir = runs.new_run_dir("forward")
+    state["follow_runs"][run_id] = {"engine": engine, "task": None, "run_dir": run_dir}
 
     def persist():
         runs.write_metrics(run_dir, {"mode": "forward", "chain": chain, "addresses": engine.addresses, "credits_used": app.state.client.credits_used, **engine.status()})
@@ -539,35 +579,68 @@ async def api_follow_start(body: dict):
         finally:
             persist()
 
-    state["follow_task"] = asyncio.create_task(loop())
-    return {"started": True, "run": run_dir.name}
+    state["follow_runs"][run_id]["task"] = asyncio.create_task(loop())
+    return {"started": True, "run_id": run_id, "run": run_dir.name}
 
 
 @app.post("/api/follow/stop")
-async def api_follow_stop():
-    task = state.get("follow_task")
+async def api_follow_stop(body: dict | None = None):
+    body = body or {}
+    run_id = body.get("run_id")
+    if not run_id:
+        raise HTTPException(400, "run_id is required")
+    entry = state["follow_runs"].get(run_id)
+    if not entry:
+        raise HTTPException(404, "no such run")
+    task = entry.get("task")
     if task:
         task.cancel()
         try:
             await task
         except (asyncio.CancelledError, Exception):
             pass
-        state["follow_task"] = None
-    return {"stopped": True, "run": state["run_dir"].name if state.get("run_dir") else None}
+        entry["task"] = None
+    return {"stopped": True, "run_id": run_id, "run": entry["run_dir"].name}
+
+
+@app.post("/api/follow/stop_all")
+async def api_follow_stop_all():
+    stopped = []
+    for run_id in list(state["follow_runs"].keys()):
+        entry = state["follow_runs"][run_id]
+        task = entry.get("task")
+        if task:
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+            entry["task"] = None
+            stopped.append(run_id)
+    return {"stopped": stopped}
+
+
+def _run_summary(run_id: str, entry: dict) -> dict:
+    running = bool(entry.get("task") and not entry["task"].done())
+    return {"run_id": run_id, "running": running, "run": entry["run_dir"].name, **entry["engine"].status()}
 
 
 @app.get("/api/follow/status")
-def api_follow_status():
-    running = bool(state.get("follow_task") and not state["follow_task"].done())
-    if not state.get("follow"):
-        return {"following": False, "running": False, "list": follow_list()}
+def api_follow_status(run_id: str | None = None):
+    if run_id:
+        entry = state["follow_runs"].get(run_id)
+        if not entry:
+            raise HTTPException(404, "no such run")
+        return {"following": True, "credits_used": app.state.client.credits_used, "list": follow_list(), **_run_summary(run_id, entry)}
+    runs_out = [_run_summary(rid, entry) for rid, entry in state["follow_runs"].items()]
+    runs_out.sort(key=lambda r: -(r.get("started_ts") or 0))
+    any_running = any(r["running"] for r in runs_out)
     return {
-        "following": True,
-        "running": running,
-        "run": state["run_dir"].name if state.get("run_dir") else None,
+        "following": bool(runs_out),
+        "running": any_running,
         "credits_used": app.state.client.credits_used,
         "list": follow_list(),
-        **state["follow"].status(),
+        "runs": runs_out,
     }
 
 

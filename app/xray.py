@@ -37,6 +37,14 @@ async def token_context(client: CoinGeckoClient, chain: str, token: str, pool: s
         info = {}
     holders = info.get("holders") or {}
     image = a.get("image_url") if a.get("image_url") not in (None, "missing.png") else None
+    price_history = []
+    pool_addr = pa.get("address")
+    if pool_addr:
+        try:
+            candles = await client.pool_ohlcv(chain, pool_addr, "hour", aggregate=1, limit=48)
+            price_history = [{"ts": row[0], "close": row[4]} for row in reversed(candles) if len(row) >= 5]
+        except CoinGeckoError:
+            price_history = []
     return {
         "chain": chain,
         "chain_label": chains.label(chain),
@@ -55,6 +63,7 @@ async def token_context(client: CoinGeckoClient, chain: str, token: str, pool: s
         "pool_address": pa.get("address"),
         "pool_name": pa.get("name"),
         "pool_created_at": pa.get("pool_created_at"),
+        "price_history": price_history,
         "gt_score": w._f(info.get("gt_score")),
         "gt_score_details": info.get("gt_score_details") or {},
         "gt_verified": info.get("gt_verified"),

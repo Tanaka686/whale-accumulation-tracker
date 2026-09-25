@@ -32,13 +32,14 @@ def _targets(addresses: list, chain: str) -> list[dict]:
 class FollowEngine:
     """Mirrors buys/sells from a list of followed wallets into one paper Portfolio, scaled to budget."""
 
-    def __init__(self, client: CoinGeckoClient, chain: str, addresses: list, budget_usd: float, assumptions: dict, poll_s: float = 30):
+    def __init__(self, client: CoinGeckoClient, chain: str, addresses: list, budget_usd: float, assumptions: dict, poll_s: float = 30, label: str | None = None):
         self.client = client
         self.chain = chain
         self.targets = _targets(addresses, chain)
         self.poll_s = poll_s
         self.budget_usd = budget_usd
         self.assumptions = assumptions
+        self.label = label
         self.portfolio = Portfolio(
             cash=budget_usd,
             slippage_bps=assumptions.get("slippage_bps", 30),
@@ -173,6 +174,8 @@ class FollowEngine:
             meta = tokens.get(chain, token)
             price = self.last_price.get(token)
             value = p.qty * price if price else p.cost_usd
+            unrealized = value - p.cost_usd
+            realized = self.portfolio.realized_by_symbol.get(token, 0.0)
             out.append(
                 {
                     "token": token,
@@ -183,8 +186,11 @@ class FollowEngine:
                     "cost_usd": round(p.cost_usd, 2),
                     "price": price,
                     "value_usd": round(value, 2),
-                    "pnl_usd": round(value - p.cost_usd, 2),
-                    "pnl_pct": round((value - p.cost_usd) / p.cost_usd * 100, 2) if p.cost_usd else None,
+                    "pnl_usd": round(unrealized, 2),
+                    "pnl_pct": round(unrealized / p.cost_usd * 100, 2) if p.cost_usd else None,
+                    "unrealized_pnl_usd": round(unrealized, 2),
+                    "realized_pnl_usd": round(realized, 2),
+                    "total_pnl_usd": round(unrealized + realized, 2),
                     "opened_ts": p.opened_ts,
                 }
             )
@@ -203,6 +209,9 @@ class FollowEngine:
         step = max(1, len(curve) // 500)
         return {
             "polls": self.polls,
+            "label": self.label,
+            "chain": self.chain,
+            "assumptions": self.assumptions,
             "addresses": self.addresses,
             "targets": self.targets,
             "wallet_stats": self.wallet_stats,

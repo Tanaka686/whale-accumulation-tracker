@@ -39,6 +39,7 @@ class Portfolio:
         self.closed: list[ClosedTrade] = []
         self.equity_curve: list[tuple[float, float]] = []
         self._last_trade_ts: dict[str, float] = {}
+        self.realized_by_symbol: dict[str, float] = {}
 
     def _fill_price(self, observed_price: float, side: str) -> float:
         """Observed price moved against you by slippage_bps."""
@@ -106,6 +107,7 @@ class Portfolio:
         self.closed.append(
             ClosedTrade(symbol=symbol, qty=qty, buy_usd=cost_share, sell_usd=proceeds, pnl_usd=proceeds - cost_share, opened_ts=pos.opened_ts or ts, closed_ts=ts)
         )
+        self.realized_by_symbol[symbol] = self.realized_by_symbol.get(symbol, 0.0) + (proceeds - cost_share)
         self._last_trade_ts[symbol] = ts
         if pos.qty <= 1e-12:
             del self.positions[symbol]
@@ -122,6 +124,8 @@ class Portfolio:
             if peak > 0:
                 max_dd = max(max_dd, (peak - e) / peak)
         wins = sum(1 for t in self.closed if t.pnl_usd > 0)
+        realized = sum(t.pnl_usd for t in self.closed)
+        unrealized = sum(prices.get(sym, pos.cost_usd / pos.qty if pos.qty else 0.0) * pos.qty - pos.cost_usd for sym, pos in self.positions.items())
         return {
             "trades": len(self.closed),
             "win_rate": round(wins / len(self.closed), 3) if self.closed else None,
@@ -130,5 +134,7 @@ class Portfolio:
             "max_drawdown_pct": round(max_dd * 100, 2),
             "exposure_usd": round(sum(p.cost_usd for p in self.positions.values()), 2),
             "avg_hold_s": round(statistics.mean(t.closed_ts - t.opened_ts for t in self.closed), 0) if self.closed else None,
-            "closed_pnl_usd": round(sum(t.pnl_usd for t in self.closed), 2),
+            "closed_pnl_usd": round(realized, 2),
+            "realized_pnl_usd": round(realized, 2),
+            "unrealized_pnl_usd": round(unrealized, 2),
         }

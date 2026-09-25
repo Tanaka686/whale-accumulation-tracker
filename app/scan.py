@@ -74,7 +74,16 @@ async def scan(client: CoinGeckoClient, chain: str, source: str, n_tokens: int =
     dropped, so the Wallets tab can filter them out without losing the count.
     """
     tokens = await _tokens_from_pools(client, chain, source, n_tokens)
+    return await _wallets_for_tokens(client, chain, source, tokens)
 
+
+async def scan_tokens(client: CoinGeckoClient, chain: str, tokens: list[dict]) -> dict:
+    """Same wallet-recurrence scan as `scan()`, but for a hand-picked list of tokens (from search)
+    instead of a trending source. `tokens` items need at least {address, symbol, image_url}."""
+    return await _wallets_for_tokens(client, chain, "handpicked", tokens[:20])
+
+
+async def _wallets_for_tokens(client: CoinGeckoClient, chain: str, source: str, tokens: list[dict]) -> dict:
     async def top_traders_for(token: dict):
         try:
             traders = await client.top_traders(chain, token["address"], n=25)
