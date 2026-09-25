@@ -114,9 +114,16 @@ def equity_svg(
     width: int = 1000,
     height: int = 200,
     theme: str = "light",
+    show_labels: bool = False,
 ) -> str:
-    """Inline SVG hero chart for the report card: a filled strategy line, plus an optional lighter dashed benchmark line."""
+    """Inline SVG hero chart for the report card: a filled strategy line, plus an optional lighter dashed benchmark line.
+
+    `show_labels` adds axis context (min/max equity, start/end time) for a full-page report, where the
+    chart needs to read as evidence, not just a decorative sparkline (the report card keeps them off).
+    """
     colors = _THEME_COLORS.get(theme, _THEME_COLORS["light"])
+    pad_left = 64 if show_labels else 6
+    pad_bottom = 24 if show_labels else 6
     if not equity_curve:
         return (
             f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">'
@@ -131,38 +138,56 @@ def equity_svg(
     y_min, y_max = min(ys), max(ys)
     if y_min == y_max:
         y_min, y_max = y_min - 1, y_max + 1
+    plot_w, plot_h = width - pad_left - 6, height - pad_bottom - 6
+
+    def scale(series):
+        return _scale_points(
+            [(t, v) for t, v in series],
+            x_min, x_max, y_min, y_max, plot_w, plot_h - 6, pad=0, top_pad=6,
+        )
+
+    def shift(pts):
+        return [(x + pad_left, y + 6) for x, y in pts]
 
     parts = [
-        f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">'
+        f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,system-ui,sans-serif">'
         f'<defs><linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1">'
-        f'<stop offset="0%" stop-color="{colors["strategy"]}" stop-opacity="0.28"/>'
+        f'<stop offset="0%" stop-color="{colors["strategy"]}" stop-opacity="0.32"/>'
         f'<stop offset="100%" stop-color="{colors["strategy"]}" stop-opacity="0"/></linearGradient></defs>'
     ]
-    parts.append(
-        "".join(
-            f'<line x1="0" y1="{height * f:.1f}" x2="{width}" y2="{height * f:.1f}" '
-            f'stroke="{colors["grid"]}" stroke-width="1" stroke-dasharray="4 4"/>'
-            for f in (0.25, 0.5, 0.75)
-        )
-    )
+    grid_fracs = (0.0, 0.25, 0.5, 0.75, 1.0) if show_labels else (0.25, 0.5, 0.75)
+    for f in grid_fracs:
+        y = 6 + plot_h * f
+        parts.append(f'<line x1="{pad_left}" y1="{y:.1f}" x2="{width - 6}" y2="{y:.1f}" stroke="{colors["grid"]}" stroke-width="1" stroke-dasharray="4 4"/>')
+        if show_labels:
+            value = y_max - (y_max - y_min) * f
+            parts.append(f'<text x="{pad_left - 10}" y="{y:.1f}" fill="{colors["muted"]}" font-size="11" text-anchor="end" dominant-baseline="middle">{format_usd(value)}</text>')
 
     if benchmark:
-        b_pts = _scale_points(benchmark, x_min, x_max, y_min, y_max, width, height)
+        b_pts = shift(scale(benchmark))
         parts.append(
             f'<path d="{_smooth_path(b_pts)}" fill="none" stroke="{colors["benchmark"]}" '
             f'stroke-width="2" stroke-dasharray="7 5" stroke-linecap="round"/>'
         )
 
-    s_pts = _scale_points(equity_curve, x_min, x_max, y_min, y_max, width, height)
+    s_pts = shift(scale(equity_curve))
     line_d = _smooth_path(s_pts)
-    area_d = f"{line_d} L{s_pts[-1][0]:.1f},{height} L{s_pts[0][0]:.1f},{height} Z"
+    area_d = f"{line_d} L{s_pts[-1][0]:.1f},{6 + plot_h:.1f} L{s_pts[0][0]:.1f},{6 + plot_h:.1f} Z"
     parts.append(f'<path d="{area_d}" fill="url(#eqFill)" stroke="none"/>')
     parts.append(
         f'<path d="{line_d}" fill="none" stroke="{colors["strategy"]}" '
         f'stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
     )
     lx, ly = s_pts[-1]
+    parts.append(f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="8" fill="{colors["strategy"]}" opacity="0.18"/>')
     parts.append(f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="4.5" fill="{colors["strategy"]}"/>')
+
+    if show_labels:
+        start_label = datetime.fromtimestamp(x_min, tz=timezone.utc).strftime("%b %d, %H:%M")
+        end_label = datetime.fromtimestamp(x_max, tz=timezone.utc).strftime("%b %d, %H:%M UTC")
+        parts.append(f'<text x="{pad_left}" y="{height - 4}" fill="{colors["muted"]}" font-size="11">{start_label}</text>')
+        parts.append(f'<text x="{width - 6}" y="{height - 4}" fill="{colors["muted"]}" font-size="11" text-anchor="end">{end_label}</text>')
+
     parts.append("</svg>")
     return "".join(parts)
 
@@ -345,8 +370,8 @@ def render_report_card(
         tmp.unlink(missing_ok=True)
 
 
-def _html(run_name: str, metrics: dict, credits_used: int, chart_bytes: bytes, details: dict | None = None) -> str:
-    chart_b64 = base64.b64encode(chart_bytes).decode()
+def _html(run_name: str, metrics: dict, credits_used: int, equity_curve: list | None, benchmark: list | None = None, details: dict | None = None) -> str:
+    chart_svg = equity_svg(equity_curve or [], benchmark, width=1100, height=340, theme="dark", show_labels=True)
     details = details or {}
     esc = html.escape
     metric_items = [
@@ -387,7 +412,9 @@ h1 {{ font-size:42px; margin:8px 0; letter-spacing:-.04em; }} .sub {{ color:#aeb
 .metrics {{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin:22px 0; }}
 .metric,.panel {{ background:#151c18; border:1px solid #29362e; border-radius:14px; }} .metric {{ padding:15px; }} .metric span,small,.muted {{ display:block; color:#8e9c92; font-size:11px; }} .metric b {{ display:block; margin-top:7px; font-size:20px; }}
 .positive {{ color:#55dc70!important; }} .negative {{ color:#ff756d!important; }}
-.panel {{ padding:20px; margin-top:16px; }} .panel h2 {{ margin:0 0 14px; font-size:18px; }} .chart {{ width:100%; border-radius:10px; background:#0f1511; }}
+.panel {{ padding:20px; margin-top:16px; }} .panel h2 {{ margin:0 0 14px; font-size:18px; }}
+.chart-card {{ background:radial-gradient(circle at 15% 0%,rgba(139,197,63,.08),transparent 45%),#0f1511; border-radius:14px; padding:18px 14px 10px; }} .chart-card svg {{ width:100%; height:auto; display:block; }}
+.chart-legend {{ display:flex; gap:16px; margin-bottom:8px; font-size:12px; color:#aebbb1; }} .chart-legend span {{ display:inline-flex; align-items:center; gap:6px; }} .swatch {{ width:10px; height:10px; border-radius:50%; display:inline-block; }} .swatch.strategy {{ background:#8bc53f; }} .swatch.benchmark {{ background:#5f6b64; border:1px dashed #aebbb1; }}
 table {{ border-collapse:collapse; width:100%; }} th {{ color:#8e9c92; font-size:10px; text-transform:uppercase; letter-spacing:.08em; text-align:left; }} th,td {{ padding:11px 9px; border-bottom:1px solid #29362e; font-size:13px; }} td small {{ margin-top:3px; }}
 .footer {{ color:#718076; font-size:12px; margin-top:24px; }} .token-cell{{display:flex;align-items:center;gap:8px}} .token-image{{width:26px;height:26px;border-radius:50%;object-fit:cover;background:#26352a;display:grid;place-items:center;color:#8bc53f;font-weight:800}} .token-image.fallback{{font-size:11px}}
 @media(max-width:800px) {{ .metrics {{ grid-template-columns:repeat(2,1fr); }} h1 {{ font-size:31px; }} .wrap {{ padding:25px 16px 60px; }} }}
@@ -396,7 +423,7 @@ table {{ border-collapse:collapse; width:100%; }} th {{ color:#8e9c92; font-size
 <main class="wrap"><div class="eyebrow">CoinGecko API · Smart Money Radar</div><h1>{esc(prettify_run_name(run_name))}</h1>
 <p class="sub">Paper-trading evidence with wallet signals, token context, and an auditable decision feed.</p>
 <section class="metrics">{metric_html}</section>
-<section class="panel"><h2>Equity curve</h2><img class="chart" src="data:image/png;base64,{chart_b64}" alt="equity curve"></section>
+<section class="panel"><h2>Equity curve</h2><div class="chart-legend"><span><span class="swatch strategy"></span>Strategy</span>{'<span><span class="swatch benchmark"></span>Benchmark</span>' if benchmark else ''}</div><div class="chart-card">{chart_svg}</div></section>
 <section class="panel"><h2>Token breakdown</h2><table><thead><tr><th>Token</th><th>Buys</th><th>Sells</th><th>Paper notional</th><th>P&amp;L</th></tr></thead><tbody>{token_html}</tbody></table></section>
 <section class="panel"><h2>Decision feed</h2><table><thead><tr><th>Time</th><th>Action</th><th>Token</th><th>Wallet</th><th>Context</th></tr></thead><tbody>{decision_html}</tbody></table></section>
 <p class="footer">Paper trades are simulated. CoinGecko API data is used for observations; this report does not represent financial advice or executed orders.</p></main>
@@ -434,5 +461,5 @@ def build(
         theme=theme,
     )
     html_path = out / "report.html"
-    html_path.write_text(_html(run_name, metrics, credits_used, chart_bytes, details))
+    html_path.write_text(_html(run_name, metrics, credits_used, equity_curve, benchmark, details))
     return {"html": str(html_path), "equity_png": str(out / "equity.png"), "card_png": str(card_path)}
