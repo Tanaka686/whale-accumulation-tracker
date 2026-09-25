@@ -194,19 +194,30 @@ async function openDrawer(address) {
     $("#drawer-body").innerHTML = lockedCardHtml(d.feature, d.upgrade_url);
     return;
   }
+  const caps = d.capabilities || {};
+  const holdingsSection = caps.balances
+    ? `<h3>Holdings</h3>
+    <table><tbody>${(d.holdings || []).map((h) => `<tr><td>${h.symbol || "?"}</td><td>${fmtUsd(h.value_usd)}</td></tr>`).join("") || "<tr><td class='empty-note'>None on this chain</td></tr>"}</tbody></table>`
+    : "";
+  const tradesSection = caps.trades
+    ? `<h3>Recent trades</h3>
+    <table><tbody>${(d.recent_trades || []).slice(0, 10).map((t) => `<tr><td>${t.kind}</td><td>${fmtUsd(t.usd)}</td></tr>`).join("") || "<tr><td class='empty-note'>No recent trades</td></tr>"}</tbody></table>`
+    : "";
   $("#drawer-body").innerHTML = `
     <h2>${address.slice(0, 8)}...${address.slice(-6)}</h2>
     <div class="stat-grid">
       <div class="stat"><div class="label">Lifetime realized</div><div class="value ${d.lifetime_realized_pnl_usd >= 0 ? "up" : "down"}">${fmtUsd(d.lifetime_realized_pnl_usd)}</div></div>
       <div class="stat"><div class="label">Tokens traded</div><div class="value">${d.tokens_traded ?? "--"}</div></div>
     </div>
-    <h3>Holdings</h3>
-    <table><tbody>${(d.holdings || []).map((h) => `<tr><td>${h.symbol || "?"}</td><td>${fmtUsd(h.value_usd)}</td></tr>`).join("") || "<tr><td class='empty-note'>None on this chain</td></tr>"}</tbody></table>
+    ${holdingsSection}
     <h3>Top performance by token</h3>
     <table><tbody>${(d.performance || []).slice(0, 8).map((p) => `<tr><td>${p.symbol || "?"}</td><td class="${(p.realized_pnl_usd || 0) >= 0 ? "up" : "down"}">${fmtUsd(p.realized_pnl_usd)}</td></tr>`).join("")}</tbody></table>
-    <h3>Recent trades</h3>
-    <table><tbody>${(d.recent_trades || []).slice(0, 10).map((t) => `<tr><td>${t.kind}</td><td>${fmtUsd(t.usd)}</td></tr>`).join("")}</tbody></table>
+    ${tradesSection}
   `;
+}
+
+function closeDrawer() {
+  $("#drawer-backdrop").classList.remove("open");
 }
 
 // ---- Follow tab ----
@@ -309,8 +320,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   $("#follow-start").addEventListener("click", startFollow);
   $("#follow-stop").addEventListener("click", stopFollow);
-  $("#drawer-close").addEventListener("click", () => $("#drawer-backdrop").classList.remove("open"));
+  $("#drawer-close").addEventListener("click", closeDrawer);
   $("#drawer-backdrop").addEventListener("click", (e) => {
-    if (e.target.id === "drawer-backdrop") $("#drawer-backdrop").classList.remove("open");
+    if (e.target.id === "drawer-backdrop") closeDrawer();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("#drawer-backdrop").classList.contains("open")) closeDrawer();
   });
 });

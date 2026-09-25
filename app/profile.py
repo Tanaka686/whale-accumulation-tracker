@@ -3,6 +3,7 @@ import asyncio
 
 from core import config as core_config
 from core.client import CoinGeckoClient
+from core.wallets import _f
 
 from . import scoring
 
@@ -52,8 +53,8 @@ async def wallet_drawer(client: CoinGeckoClient, chain: str, address: str) -> di
             {
                 "symbol": s.get("symbol"),
                 "network": s.get("network"),
-                "realized_pnl_usd": s.get("realized_pnl_usd"),
-                "unrealized_pnl_usd": s.get("unrealized_pnl_usd"),
+                "realized_pnl_usd": _f(s.get("realized_pnl_usd"), 0.0),
+                "unrealized_pnl_usd": _f(s.get("unrealized_pnl_usd"), 0.0),
                 "total_buy_count": s.get("total_buy_count"),
                 "total_sell_count": s.get("total_sell_count"),
             }
@@ -65,9 +66,9 @@ async def wallet_drawer(client: CoinGeckoClient, chain: str, address: str) -> di
         {
             "symbol": b.get("symbol"),
             "network": b.get("network"),
-            "balance": b.get("balance"),
-            "value_usd": b.get("value_usd"),
-            "change_24h": b.get("h24_price_change_percentage"),
+            "balance": _f(b.get("balance"), 0.0),
+            "value_usd": _f(b.get("value_usd"), 0.0),
+            "change_24h": _f(b.get("h24_price_change_percentage")),
         }
         for b in (balances.get("balances") if isinstance(balances, dict) else []) or []
     ][:20]
@@ -75,7 +76,7 @@ async def wallet_drawer(client: CoinGeckoClient, chain: str, address: str) -> di
         {
             "ts": t.get("block_timestamp"),
             "kind": t.get("kind"),
-            "usd": t.get("volume_in_usd"),
+            "usd": _f(t.get("volume_in_usd"), 0.0),
             "pool_dex": t.get("pool_dex"),
             "tx": t.get("tx_hash"),
         }
@@ -89,7 +90,7 @@ async def wallet_drawer(client: CoinGeckoClient, chain: str, address: str) -> di
         "holdings": holdings,
         "performance": performance,
         "recent_trades": recent_trades,
-        "lifetime_realized_pnl_usd": pnl_attrs.get("total_realized_pnl_usd"),
-        "lifetime_unrealized_pnl_usd": pnl_attrs.get("total_unrealized_pnl_usd"),
+        "lifetime_realized_pnl_usd": _f(pnl_attrs.get("total_realized_pnl_usd"), 0.0),
+        "lifetime_unrealized_pnl_usd": _f(pnl_attrs.get("total_unrealized_pnl_usd"), 0.0),
         "tokens_traded": pnl_attrs.get("total_tokens"),
     }
