@@ -72,7 +72,7 @@ async def _fetch_core(client: CoinGeckoClient, chain: str, address: str) -> dict
 
 def _summary(address: str, chain: str, raw: dict, budget_usd: float) -> dict:
     """The fields a Radar row / follow card needs, with no raw trade lists attached."""
-    scored = scoring.profile_wallet(raw["pnl"], raw["trades"], budget_usd, balances_attrs=raw["balances"] if raw["status"]["balances"] == "ok" else None)
+    scored = scoring.profile_wallet(raw["pnl"], raw["trades"], budget_usd, balances_attrs=raw["balances"] if raw["status"]["balances"] == "ok" else None, address=address)
     scored.pop("closed_trades", None)
     # Keep the detailed feature objects for the drawer, but also expose the values
     # the scan table/follow cards need directly. The earlier UI only received the

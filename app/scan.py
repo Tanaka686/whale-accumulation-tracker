@@ -2,7 +2,7 @@
 import asyncio
 
 from core.client import CoinGeckoClient
-from core.wallets import _f, likely_bot_row
+from core.wallets import _f, known_infra, likely_bot_row
 
 from . import config
 
@@ -102,6 +102,7 @@ async def scan(client: CoinGeckoClient, chain: str, source: str, n_tokens: int =
                     "bought_seen_usd": 0.0,
                     "trades_seen": 0,
                     "likely_bot": False,
+                    "known_infra": known_infra(address),
                 },
             )
             c["seen_in"].append(
@@ -114,7 +115,7 @@ async def scan(client: CoinGeckoClient, chain: str, source: str, n_tokens: int =
 
     candidates = sorted(
         by_wallet.values(),
-        key=lambda c: (c["likely_bot"], -len(c["seen_in"]), -c["realized_seen_usd"]),
+        key=lambda c: (bool(c["known_infra"]), c["likely_bot"], -len(c["seen_in"]), -c["realized_seen_usd"]),
     )
     for c in candidates:
         c["realized_seen_usd"] = round(c["realized_seen_usd"])

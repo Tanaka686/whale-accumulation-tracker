@@ -472,10 +472,25 @@ def api_follow_remove(body: dict):
 def api_follow_autopick(body: dict | None = None):
     body = body or {}
     k = int(body.get("k", config.DEFAULT_TOP_K_FOLLOW))
-    profiles = [p for p in state["last_profiles"].values() if p.get("copyable") and p.get("label") != "bot_like"]
+    all_profiled = list(state["last_profiles"].values())
+    profiles = [p for p in all_profiled if p.get("copyable")]
     profiles.sort(key=lambda p: (p.get("skill_score") or 0, p.get("copyability") or 0), reverse=True)
     if not profiles:
-        return {"picked": [], "list": follow_list(), "message": "Profile some wallets on the Radar first."}
+        if not all_profiled:
+            message = "Profile some wallets on the Radar first."
+        else:
+            excluded_bot = sum(1 for p in all_profiled if p.get("label") == "bot_like")
+            excluded_infra = sum(1 for p in all_profiled if p.get("label") == "protocol")
+            reasons = []
+            if excluded_bot:
+                reasons.append(f"{excluded_bot} bot-like")
+            if excluded_infra:
+                reasons.append(f"{excluded_infra} likely contract/infrastructure")
+            not_copyable = len(all_profiled) - excluded_bot - excluded_infra
+            if not_copyable > 0:
+                reasons.append(f"{not_copyable} not copyable at this budget")
+            message = f"{len(all_profiled)} wallet(s) profiled, but none qualify ({', '.join(reasons)}). Try a different token/source, or raise your budget."
+        return {"picked": [], "list": follow_list(), "message": message}
     items = {f["address"].lower(): f for f in follow_list()}
     picked = []
     for p in profiles[:k]:

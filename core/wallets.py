@@ -100,6 +100,23 @@ def match_metrics(closed: list[dict]) -> dict:
 # ---- lifetime PnL and recent-activity summaries, from the wallet endpoints ----
 
 
+def _sane_lifetime_pnl(stats: list[dict], field: str) -> tuple[float, int]:
+    """Sums a per-token PnL field, excluding positions whose PnL is wildly inconsistent with their own
+    traded volume (a strong sign of a mispriced/broken token, e.g. a fake token with a manipulated
+    price). Returns (sum, count_excluded). A single garbage token can otherwise make a wallet's whole
+    lifetime PnL meaningless (seen live: one token inflated a wallet's unrealized PnL past $2 septillion).
+    """
+    total, excluded = 0.0, 0
+    for s in stats:
+        value = _f(s.get(field), 0.0) or 0.0
+        volume = (_f(s.get("total_buy_usd"), 0.0) or 0.0) + (_f(s.get("total_sell_usd"), 0.0) or 0.0)
+        if abs(value) > max(volume * 25, 2_000_000) and abs(value) > 250_000:
+            excluded += 1
+            continue
+        total += value
+    return total, excluded
+
+
 def pnl_features(attrs: dict | None) -> dict:
     """Summarizes GET /onchain/wallets/{address}/pnl into lifetime win rate, concentration, volume and per-chain PnL."""
     if not attrs:
@@ -112,13 +129,28 @@ def pnl_features(attrs: dict | None) -> dict:
     sells = sum(s.get("total_sell_count") or 0 for s in stats)
     volume = sum((_f(s.get("total_buy_usd"), 0.0) or 0) + (_f(s.get("total_sell_usd"), 0.0) or 0) for s in stats)
     nets = [n for n in (attrs.get("networks") or []) if (n.get("tokens") or 0) > 0]
+    realized_clean, realized_excl = _sane_lifetime_pnl(stats, "realized_pnl_usd")
+    unrealized_clean, unrealized_excl = _sane_lifetime_pnl(stats, "unrealized_pnl_usd")
+    raw_realized = round(_f(attrs.get("total_realized_pnl_usd"), 0.0), 0)
+    raw_unrealized = round(_f(attrs.get("total_unrealized_pnl_usd"), 0.0), 0)
+    outliers_excluded = realized_excl + unrealized_excl
+    # The API's own lifetime total can include tokens beyond this 200-row page, so a bad position we
+    # never even see can still blow up the headline number. If the API's total disagrees wildly with
+    # what we can actually verify from the visible (and already-filtered) positions, trust the visible
+    # sum instead — it's sorted by size, so it already captures the wallet's real, meaningful PnL.
+    def _disagrees(raw: float, clean: float) -> bool:
+        return abs(raw) > max(abs(clean) * 10, 1_000_000) and abs(raw - clean) > 1_000_000
+    use_clean = outliers_excluded > 0 or _disagrees(raw_realized, realized_clean) or _disagrees(raw_unrealized, unrealized_clean)
     return {
         "available": True,
         "tokens_traded": attrs.get("total_tokens"),
         "tokens_in_sample": len(stats),
         "tokens_sold": len(sold),
-        "lifetime_realized_pnl_usd": round(_f(attrs.get("total_realized_pnl_usd"), 0.0), 0),
-        "lifetime_unrealized_pnl_usd": round(_f(attrs.get("total_unrealized_pnl_usd"), 0.0), 0),
+        "lifetime_realized_pnl_usd": round(realized_clean, 0) if use_clean else raw_realized,
+        "lifetime_unrealized_pnl_usd": round(unrealized_clean, 0) if use_clean else raw_unrealized,
+        "lifetime_realized_pnl_usd_raw": raw_realized,
+        "lifetime_unrealized_pnl_usd_raw": raw_unrealized,
+        "pnl_outliers_excluded": outliers_excluded,
         "win_rate_tokens": round(len(wins) / len(sold), 3) if sold else None,
         "profit_concentration": round(max(positive) / sum(positive), 3) if positive else None,
         "total_buys": buys,
@@ -187,11 +219,61 @@ def likely_bot_row(row: dict) -> bool:
     return (row.get("total_buy_count") or 0) + (row.get("total_sell_count") or 0) > 1500
 
 
+# ---- infrastructure / contract detection ----
+#
+# CoinGecko's wallet endpoints answer for any address, including contracts: routers, AMM pools,
+# token-approval helpers, account-abstraction singletons, treasuries. Those aren't discretionary
+# traders, and their PnL/activity numbers don't mean what they'd mean for a person. We can't check
+# on-chain bytecode from this API, so this is two honest, separate signals:
+#  1. a short list of addresses that are universally known to be infrastructure, matched exactly
+#  2. a heuristic for everything else: enormous trade volume spread over many chains at the same
+#     address, which real individually-managed wallets essentially never show
+#
+# Neither is a certainty. Both are surfaced as "likely", not "confirmed".
+
+KNOWN_INFRA_ADDRESSES: dict[str, str] = {
+    # Same address on (almost) every EVM chain via a CREATE2 factory.
+    "0x000000000022d473030f116ddee9f6b43ac78ba3": "Permit2 (Uniswap token-approval helper)",
+    "0xca11bde05977b3631167028862be2a173976ca11": "Multicall3",
+    "0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789": "ERC-4337 EntryPoint v0.6",
+    "0x0000000071727de22e5e9d8baf0edac6f37da032": "ERC-4337 EntryPoint v0.7",
+    "0x66a9893cc07d91d95644aedd05d03f95e1dba8af": "Uniswap Universal Router",
+    "0x1111111254eeb25477b68fb85ed929f73a960582": "1inch Aggregation Router",
+    "0xdef1c0ded9bec7f1a1670819833240f027b25eff": "0x Exchange Proxy",
+    "0x9008d19f58aabd9ed0d60971565aa8510560ab41": "CoW Protocol Settlement",
+    # Canonical wrapped-native predeploys/tokens (per chain, so not one universal address).
+    "0x4200000000000000000000000000000000000006": "Wrapped ETH predeploy (OP-stack chains)",
+    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": "WETH (Ethereum)",
+}
+
+
+def known_infra(address: str) -> str | None:
+    """The name of a well-known infrastructure contract at this address, if it's an exact match."""
+    return KNOWN_INFRA_ADDRESSES.get((address or "").lower())
+
+
+def looks_like_infra_contract(pnl: dict, activity: dict) -> bool:
+    """Heuristic: huge trade volume spread across many chains at once. Real wallets rarely look like
+    this; shared infrastructure (routers, pools, singleton helpers) commonly does."""
+    total_trades = (pnl.get("total_buys") or 0) + (pnl.get("total_sells") or 0)
+    chains = len(pnl.get("active_networks") or [])
+    tokens = pnl.get("tokens_traded") or 0
+    return (total_trades > 3000 and chains >= 4) or (tokens > 300 and chains >= 3)
+
+
 # ---- labels + copyability ----
 
 
-def label_wallet(metrics: dict, pnl: dict, activity: dict) -> str:
-    """One rule-based label, checked in priority order: bot_like, dormant, proven_trader, one_hit, whale, flipper."""
+def label_wallet(metrics: dict, pnl: dict, activity: dict, address: str | None = None) -> str:
+    """One rule-based label, checked in priority order: protocol, bot_like, dormant, proven_trader,
+    one_hit, whale, flipper. `protocol` covers both known infra addresses and the high-volume,
+    many-chain heuristic (see looks_like_infra_contract); it's the only label that can be wrong in
+    either direction, so it's shown with a plain "likely" / named-match caveat, never as a hard fact.
+    """
+    if address and known_infra(address):
+        return "protocol"
+    if looks_like_infra_contract(pnl, activity):
+        return "protocol"
     if (activity.get("recent_trades_per_day") or 0) > 50:
         return "bot_like"
     days_idle = activity.get("days_since_last_trade")
