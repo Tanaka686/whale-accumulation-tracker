@@ -8,7 +8,13 @@ from core.wallets import _f, _ts, known_infra, likely_bot_row
 from . import config
 
 RECENT_TRADES_LOOKBACK_HOURS = 24
-RECENT_TRADES_TIMEOUT_S = 8
+# top_traders is a Beta CoinGecko endpoint that can genuinely take 15-25s for a token with a long,
+# heavily-traded history (measured live: JUP and cbBTC both took 19-25s on a real, successful,
+# non-retried request) -- not a bug on our end, just how slow that endpoint's own computation is for
+# popular tokens. The right tradeoff here is to wait for the real answer, not fail fast and return
+# nothing: this timeout exists only to bound a truly pathological hang, not to short-circuit a slow
+# but working response.
+PER_CALL_TIMEOUT_S = 45
 
 
 def _short(addr: str | None) -> str:
@@ -101,11 +107,7 @@ async def _recent_traders_for_tokens(client: CoinGeckoClient, chain: str, tokens
         if not pool:
             return token, []
         try:
-            # A busy pool's own trade log can be large and slow to fetch (seen live: a top-25
-            # cbBTC/WETH pool on Base took ~25s, well past the frontend's request timeout, for one
-            # token alone). This is optional enrichment, not a required part of the scan, so it's
-            # capped hard rather than allowed to stall the whole request.
-            rows = await asyncio.wait_for(client.pool_trades(chain, pool, trading_period="1d", max_pages=1), timeout=RECENT_TRADES_TIMEOUT_S)
+            rows = await asyncio.wait_for(client.pool_trades(chain, pool, trading_period="1d", max_pages=1), timeout=PER_CALL_TIMEOUT_S)
         except Exception:
             rows = []
         return token, rows
@@ -131,7 +133,7 @@ async def _recent_traders_for_tokens(client: CoinGeckoClient, chain: str, tokens
 async def _wallets_for_tokens(client: CoinGeckoClient, chain: str, source: str, tokens: list[dict]) -> dict:
     async def top_traders_for(token: dict):
         try:
-            traders = await asyncio.wait_for(client.top_traders(chain, token["address"], n=25), timeout=RECENT_TRADES_TIMEOUT_S)
+            traders = await asyncio.wait_for(client.top_traders(chain, token["address"], n=25), timeout=PER_CALL_TIMEOUT_S)
         except Exception:
             traders = []
         return token, traders
