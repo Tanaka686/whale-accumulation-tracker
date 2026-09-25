@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Smart Money Radar · CoinGecko API</title>
-<link rel="stylesheet" href="/core-web/theme.css"><link rel="stylesheet" href="/static/styles.css">
+<link rel="stylesheet" href="/core-web/theme.css"><link rel="stylesheet" href="/static/styles.css"><link rel="stylesheet" href="/static/follow-overrides.css">
 </head>
 <body><div class="app-shell">
 <header class="hero"><div class="brand"><div id="cg-badge"></div><div><div class="eyebrow">ON-CHAIN DISCOVERY LAB</div><h1>Smart Money Radar</h1><p>Find the wallets behind the move, understand their edge, and paper-follow the signal.</p></div></div><div class="hero-stats"><div><b id="hero-chain-count">—</b><span>networks indexed</span></div><div><b>4</b><span>evidence lanes</span></div></div></header>
@@ -11,7 +11,7 @@
 
 <section id="panel-scan" class="panel active">
   <div id="scan-locked"></div>
-  <div class="control-card"><div class="control-title"><div><div class="eyebrow">01 · DISCOVER</div><h2>Scan the market pulse</h2><p>Use a chain-wide shortlist, then surface the wallets recurring across the tokens.</p></div><button class="primary big" id="scan-run">Run radar <span>↗</span></button></div>
+  <div class="control-card"><div class="control-title"><div><div class="eyebrow">01 · DISCOVER</div><h2>Scan the market pulse</h2><p>Use a chain-wide shortlist, then surface the wallets recurring across the tokens.</p></div><button class="primary big" id="scan-run">Run radar <span>↗</span></button></div><div class="radar-search"><span>⌕</span><input id="radar-search" placeholder="Search any token, pool, ticker, contract, or wallet…" autocomplete="off"><button class="ghost" id="radar-search-btn">Search</button></div><div id="radar-search-results" class="radar-search-results"></div>
     <div class="controls"><label class="field wide">Network <div class="select-wrap"><input id="scan-chain-search" placeholder="Search every CoinGecko network…" autocomplete="off"><select id="scan-chain"></select></div></label><label class="field">Signal source<select id="scan-source"></select></label><label class="field">Tokens<select id="scan-n-tokens"><option>5</option><option selected>10</option><option>20</option></select></label></div>
     <div id="chain-results" class="chain-results"></div><div class="statusline"><span class="live-dot"></span><span id="scan-status">Ready for a scan</span><span class="status-spacer"></span><span id="scan-credits">Analyst endpoints are plan-gated</span></div>
   </div>

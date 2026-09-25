@@ -105,7 +105,7 @@ async def scan(client: CoinGeckoClient, chain: str, source: str, n_tokens: int =
                 },
             )
             c["seen_in"].append(
-                {"symbol": token["symbol"], "address": token["address"], "image_url": token.get("image_url"), "realized_usd": round(float(t.get("realized_pnl_usd") or 0))}
+                {"symbol": token["symbol"], "address": token["address"], "image_url": token.get("image_url"), "image": token.get("image_url"), "realized_usd": round(float(t.get("realized_pnl_usd") or 0))}
             )
             c["bought_seen_usd"] += float(t.get("total_buy_usd") or 0)
             c["realized_seen_usd"] += float(t.get("realized_pnl_usd") or 0)

@@ -121,6 +121,12 @@ class FollowEngine:
             if fresh:
                 self.last_ts[address] = fresh[-1]["ts"]
         await self._resolve_tokens()
+        # Enrich the persisted decision payload after the shared token cache has resolved. This
+        # keeps follow feeds and later reports readable instead of reducing every token to an address.
+        for decision in new_decisions:
+            meta = tokens.get(decision.get("chain", self.chain), decision.get("token")) if decision.get("token") else {}
+            decision["symbol"] = meta.get("symbol")
+            decision["image"] = meta.get("image")
         await self._mark_to_market()
         self.portfolio.snapshot(time.time(), self.last_price)
         self.polls += 1

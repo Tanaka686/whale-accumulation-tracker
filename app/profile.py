@@ -74,7 +74,31 @@ def _summary(address: str, chain: str, raw: dict, budget_usd: float) -> dict:
     """The fields a Radar row / follow card needs, with no raw trade lists attached."""
     scored = scoring.profile_wallet(raw["pnl"], raw["trades"], budget_usd, balances_attrs=raw["balances"] if raw["status"]["balances"] == "ok" else None)
     scored.pop("closed_trades", None)
-    return {"address": address, "chain": chain, "status": raw["status"], **scored}
+    # Keep the detailed feature objects for the drawer, but also expose the values
+    # the scan table/follow cards need directly. The earlier UI only received the
+    # nested objects, which made valid API P&L and win-rate data render as dashes.
+    pnl = scored.get("pnl_features") or {}
+    matched = scored.get("match_metrics") or {}
+    portfolio = scored.get("portfolio") or {}
+    activity = scored.get("activity") or {}
+    return {
+        "address": address,
+        "chain": chain,
+        "status": raw["status"],
+        "realized_pnl_usd": matched.get("realized_pnl_usd", pnl.get("lifetime_realized_pnl_usd")),
+        "unrealized_pnl_usd": pnl.get("lifetime_unrealized_pnl_usd"),
+        "total_pnl_usd": round((matched.get("realized_pnl_usd") or pnl.get("lifetime_realized_pnl_usd") or 0) + (pnl.get("lifetime_unrealized_pnl_usd") or 0), 2),
+        "win_rate": matched.get("win_rate") if matched.get("trades") else pnl.get("win_rate_tokens"),
+        "trades": matched.get("trades") or pnl.get("total_buys", 0) + pnl.get("total_sells", 0),
+        "active_chains": pnl.get("active_networks") or [],
+        "portfolio_value_usd": portfolio.get("portfolio_value_usd"),
+        "first_seen_ts": activity.get("first_seen_ts"),
+        "last_seen_ts": activity.get("last_seen_ts"),
+        "style": scored.get("style"),
+        "tags": scored.get("tags") or [],
+        "days_since_last_trade": activity.get("days_since_last_trade"),
+        **scored,
+    }
 
 
 async def profile_one(client: CoinGeckoClient, chain: str, address: str, budget_usd: float) -> dict:

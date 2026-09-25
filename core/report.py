@@ -1,5 +1,6 @@
 """Turns a paper-trading run into a shareable report: equity chart, report.html, and a report-card PNG."""
 import base64
+import html
 import io
 from datetime import datetime, timezone
 from pathlib import Path
@@ -344,22 +345,61 @@ def render_report_card(
         tmp.unlink(missing_ok=True)
 
 
-def _html(run_name: str, metrics: dict, credits_used: int, chart_bytes: bytes) -> str:
+def _html(run_name: str, metrics: dict, credits_used: int, chart_bytes: bytes, details: dict | None = None) -> str:
     chart_b64 = base64.b64encode(chart_bytes).decode()
-    rows = "".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in metrics.items())
+    details = details or {}
+    esc = html.escape
+    metric_items = [
+        ("P&L", format_usd(metrics.get("pnl_usd"), signed=True), _pnl_class(metrics.get("pnl_usd"), metrics.get("pnl_pct"))),
+        ("Return", format_pct(metrics.get("pnl_pct"), signed=True), _pnl_class(metrics.get("pnl_usd"), metrics.get("pnl_pct"))),
+        ("Win rate", format_ratio_as_pct(metrics.get("win_rate")), ""),
+        ("Trades", metrics.get("trades", "—"), ""),
+        ("Max drawdown", format_pct(metrics.get("max_drawdown_pct")), ""),
+        ("REST credits", credits_used, ""),
+    ]
+    metric_html = "".join(f'<div class="metric"><span>{esc(str(k))}</span><b class="{c}">{esc(str(v))}</b></div>' for k, v, c in metric_items)
+    token_rows = details.get("token_rows") or []
+    def token_identity(row: dict) -> str:
+        image = row.get("image")
+        visual = f'<img src="{esc(image)}" alt="" class="token-image">' if image else '<span class="token-image fallback">◈</span>'
+        label = esc(str(row.get("symbol") or row.get("token") or "—"))
+        chain = esc(str(row.get("chain") or ""))
+        return f'<td class="token-cell">{visual}<span><strong>{label}</strong><small>{chain}</small></span></td>'
+    token_html = "".join(
+        f'<tr>{token_identity(r)}'
+        f'<td>{r.get("buys", 0)}</td><td>{r.get("sells", 0)}</td><td>{esc(format_usd(r.get("paper_usd"), signed=True))}</td>'
+        f'<td class="{("positive" if (r.get("pnl_usd") or 0) > 0 else "negative" if (r.get("pnl_usd") or 0) < 0 else "")}">{esc(format_usd(r.get("pnl_usd"), signed=True))}</td></tr>'
+        for r in token_rows
+    ) or '<tr><td colspan="5" class="muted">No token-level decisions were recorded for this run.</td></tr>'
+    decision_rows = details.get("decision_rows") or []
+    decision_html = "".join(
+        f'<tr><td>{esc(str(r.get("time") or "—"))}</td><td class="{("positive" if r.get("action") == "buy" else "negative" if r.get("action") == "sell" else "")}">{esc(str(r.get("action") or "signal"))}</td>'
+        f'<td>{esc(str(r.get("symbol") or r.get("token") or "—"))}</td><td>{esc(str(r.get("wallet") or "—"))}</td><td>{esc(str(r.get("reason") or ""))}</td></tr>'
+        for r in decision_rows[:30]
+    ) or '<tr><td colspan="5" class="muted">No decision feed was recorded.</td></tr>'
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>{run_name} report</title>
 <style>
-body {{ font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; color: #1a1a1a; }}
-table {{ border-collapse: collapse; width: 100%; }}
-td {{ padding: 6px 10px; border-bottom: 1px solid #eee; }}
-img {{ width: 100%; border-radius: 8px; }}
+* {{ box-sizing:border-box; }} body {{ margin:0; background:#0b0f0d; color:#f2f6f2; font-family:Inter,system-ui,sans-serif; }}
+.wrap {{ max-width:1120px; margin:0 auto; padding:42px 28px 70px; }}
+.eyebrow {{ color:#8bc53f; font-size:11px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }}
+h1 {{ font-size:42px; margin:8px 0; letter-spacing:-.04em; }} .sub {{ color:#aebbb1; margin:0 0 26px; }}
+.metrics {{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin:22px 0; }}
+.metric,.panel {{ background:#151c18; border:1px solid #29362e; border-radius:14px; }} .metric {{ padding:15px; }} .metric span,small,.muted {{ display:block; color:#8e9c92; font-size:11px; }} .metric b {{ display:block; margin-top:7px; font-size:20px; }}
+.positive {{ color:#55dc70!important; }} .negative {{ color:#ff756d!important; }}
+.panel {{ padding:20px; margin-top:16px; }} .panel h2 {{ margin:0 0 14px; font-size:18px; }} .chart {{ width:100%; border-radius:10px; background:#0f1511; }}
+table {{ border-collapse:collapse; width:100%; }} th {{ color:#8e9c92; font-size:10px; text-transform:uppercase; letter-spacing:.08em; text-align:left; }} th,td {{ padding:11px 9px; border-bottom:1px solid #29362e; font-size:13px; }} td small {{ margin-top:3px; }}
+.footer {{ color:#718076; font-size:12px; margin-top:24px; }} .token-cell{{display:flex;align-items:center;gap:8px}} .token-image{{width:26px;height:26px;border-radius:50%;object-fit:cover;background:#26352a;display:grid;place-items:center;color:#8bc53f;font-weight:800}} .token-image.fallback{{font-size:11px}}
+@media(max-width:800px) {{ .metrics {{ grid-template-columns:repeat(2,1fr); }} h1 {{ font-size:31px; }} .wrap {{ padding:25px 16px 60px; }} }}
 </style></head>
 <body>
-<h1>{run_name}</h1>
-<p>Credits used: {credits_used}</p>
-<img src="data:image/png;base64,{chart_b64}" alt="equity curve">
-<table>{rows}</table>
+<main class="wrap"><div class="eyebrow">CoinGecko API · Smart Money Radar</div><h1>{esc(prettify_run_name(run_name))}</h1>
+<p class="sub">Paper-trading evidence with wallet signals, token context, and an auditable decision feed.</p>
+<section class="metrics">{metric_html}</section>
+<section class="panel"><h2>Equity curve</h2><img class="chart" src="data:image/png;base64,{chart_b64}" alt="equity curve"></section>
+<section class="panel"><h2>Token breakdown</h2><table><thead><tr><th>Token</th><th>Buys</th><th>Sells</th><th>Paper notional</th><th>P&amp;L</th></tr></thead><tbody>{token_html}</tbody></table></section>
+<section class="panel"><h2>Decision feed</h2><table><thead><tr><th>Time</th><th>Action</th><th>Token</th><th>Wallet</th><th>Context</th></tr></thead><tbody>{decision_html}</tbody></table></section>
+<p class="footer">Paper trades are simulated. CoinGecko API data is used for observations; this report does not represent financial advice or executed orders.</p></main>
 </body></html>"""
 
 
@@ -374,6 +414,7 @@ def build(
     title: str | None = None,
     subtitle: str | None = None,
     theme: str = "light",
+    details: dict | None = None,
 ) -> dict:
     """Writes {out_dir}/{run_name}/report.html, equity.png, and report-card.png. Returns their paths."""
     out = Path(out_dir) / run_name
@@ -393,5 +434,5 @@ def build(
         theme=theme,
     )
     html_path = out / "report.html"
-    html_path.write_text(_html(run_name, metrics, credits_used, chart_bytes))
+    html_path.write_text(_html(run_name, metrics, credits_used, chart_bytes, details))
     return {"html": str(html_path), "equity_png": str(out / "equity.png"), "card_png": str(card_path)}

@@ -6,6 +6,7 @@ the pricing link instead of hanging. Every call that a chain doesn't support com
 per-section status the UI turns into a one-line notice; the rest of the page keeps working.
 """
 import asyncio
+import csv
 import json
 import logging
 import re
@@ -576,7 +577,47 @@ def _build_report(run_dir: Path) -> dict:
         raise HTTPException(404, "no metrics for this run")
     equity = runs.read_equity(run_dir)
     scenario_metrics = metrics.get("blind") or metrics.get("metrics") or metrics
-    return build_report(run_dir.name, scenario_metrics, equity, credits_used=metrics.get("credits_used", 0), out_dir=run_dir.parent)
+    return build_report(
+        run_dir.name,
+        scenario_metrics,
+        equity,
+        credits_used=metrics.get("credits_used", 0),
+        out_dir=run_dir.parent,
+        details=_report_details(run_dir),
+    )
+
+
+def _report_details(run_dir: Path) -> dict:
+    """Build small, shareable evidence tables from the run's append-only artifacts."""
+    decisions = []
+    path = run_dir / "decisions.jsonl"
+    if path.exists():
+        for line in path.read_text().splitlines():
+            try:
+                decisions.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    tokens: dict[str, dict] = {}
+    for d in decisions:
+        key = str(d.get("symbol") or d.get("token") or "unknown")
+        row = tokens.setdefault(key, {"symbol": d.get("symbol"), "token": d.get("token"), "chain": d.get("chain"), "buys": 0, "sells": 0, "paper_usd": 0.0, "pnl_usd": 0.0})
+        action = str(d.get("action") or d.get("side") or "").lower()
+        if action == "buy": row["buys"] += 1
+        if action == "sell": row["sells"] += 1
+        row["paper_usd"] += float(d.get("paper_usd") or 0)
+    trades = run_dir / "trades.csv"
+    if trades.exists():
+        with trades.open(newline="") as fh:
+            for r in csv.DictReader(fh):
+                key = r.get("symbol") or "unknown"
+                row = tokens.setdefault(key, {"symbol": key, "chain": "", "buys": 0, "sells": 0, "paper_usd": 0.0, "pnl_usd": 0.0})
+                try: row["pnl_usd"] += float(r.get("pnl_usd") or 0)
+                except (TypeError, ValueError): pass
+    decisions_out = []
+    for d in reversed(decisions[-30:]):
+        ts = d.get("ts")
+        decisions_out.append({**d, "time": time.strftime("%H:%M:%S", time.localtime(ts)) if isinstance(ts, (int, float)) else ts})
+    return {"token_rows": sorted(tokens.values(), key=lambda r: -(abs(r.get("paper_usd") or 0) + abs(r.get("pnl_usd") or 0))), "decision_rows": decisions_out}
 
 
 def _build_kit(run_dir: Path, handle: str, screenshot_urls: list[str] | None) -> dict:
