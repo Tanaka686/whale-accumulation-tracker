@@ -1,10 +1,13 @@
 """Scan tab: pick a chain + source, get today's hot tokens, then find the wallets trading them."""
 import asyncio
+import time
 
 from core.client import CoinGeckoClient
-from core.wallets import _f, known_infra, likely_bot_row
+from core.wallets import _f, _ts, known_infra, likely_bot_row
 
 from . import config
+
+RECENT_TRADES_LOOKBACK_HOURS = 24
 
 
 def _short(addr: str | None) -> str:
@@ -83,6 +86,43 @@ async def scan_tokens(client: CoinGeckoClient, chain: str, tokens: list[dict]) -
     return await _wallets_for_tokens(client, chain, "handpicked", tokens[:20])
 
 
+async def _recent_traders_for_tokens(client: CoinGeckoClient, chain: str, tokens: list[dict]) -> dict[str, dict]:
+    """Wallets seen in each token's own raw recent-trades feed, over the real API's own event data.
+
+    The top_traders endpoint has no recency field or time-windowed sort at all (its `sort` enum is
+    realized/unrealized PnL, buy/sell volume, and balance only) — a wallet can rank #1 by all-time
+    PnL from a single trade long ago and never appear again. This is the only way to know a wallet
+    genuinely traded recently: pull the pool's own trade log and see who's actually in it.
+    """
+
+    async def trades_for(token: dict):
+        pool = token.get("pool")
+        if not pool:
+            return token, []
+        try:
+            rows = await client.pool_trades(chain, pool, trading_period="1d", max_pages=1)
+        except Exception:
+            rows = []
+        return token, rows
+
+    results = await asyncio.gather(*(trades_for(t) for t in tokens))
+    by_wallet: dict[str, dict] = {}
+    for token, rows in results:
+        for r in rows:
+            address = (r.get("tx_from_address") or "").strip()
+            if not address:
+                continue
+            key = address.lower()
+            c = by_wallet.setdefault(key, {"address": address, "recent_trades_seen": 0, "recent_volume_usd": 0.0, "recent_last_ts": None, "recent_tokens": set()})
+            c["recent_trades_seen"] += 1
+            c["recent_volume_usd"] += _f(r.get("volume_in_usd"), 0.0) or 0.0
+            ts = _ts(r.get("block_timestamp"))
+            if ts and (c["recent_last_ts"] is None or ts > c["recent_last_ts"]):
+                c["recent_last_ts"] = ts
+            c["recent_tokens"].add(token["symbol"])
+    return by_wallet
+
+
 async def _wallets_for_tokens(client: CoinGeckoClient, chain: str, source: str, tokens: list[dict]) -> dict:
     async def top_traders_for(token: dict):
         try:
@@ -91,10 +131,13 @@ async def _wallets_for_tokens(client: CoinGeckoClient, chain: str, source: str, 
             traders = []
         return token, traders
 
-    results = await asyncio.gather(*(top_traders_for(t) for t in tokens))
+    top_results, recent_by_wallet = await asyncio.gather(
+        asyncio.gather(*(top_traders_for(t) for t in tokens)),
+        _recent_traders_for_tokens(client, chain, tokens),
+    )
 
     by_wallet: dict[str, dict] = {}
-    for token, traders in results:
+    for token, traders in top_results:
         for t in traders:
             address = (t.get("address") or "").strip()
             if not address:
@@ -122,6 +165,36 @@ async def _wallets_for_tokens(client: CoinGeckoClient, chain: str, source: str, 
             c["trades_seen"] += (t.get("total_buy_count") or 0) + (t.get("total_sell_count") or 0)
             c["likely_bot"] = c["likely_bot"] or likely_bot_row(t)
 
+    now = time.time()
+    for key, rc in recent_by_wallet.items():
+        c = by_wallet.get(key)
+        if c is None:
+            c = by_wallet[key] = {
+                "address": rc["address"],
+                "short": _short(rc["address"]),
+                "label_hint": None,
+                "seen_in": [],
+                "realized_seen_usd": 0.0,
+                "bought_seen_usd": 0.0,
+                "trades_seen": 0,
+                # this candidate has no top_traders/PnL data — it's here purely because it traded
+                # recently, so a wallet that alone accounts for a lot of one token's recent trades
+                # is flagged the same way a bot would be, absent any PnL-based signal.
+                "likely_bot": rc["recent_trades_seen"] > 20,
+                "known_infra": known_infra(rc["address"]),
+            }
+        c["recent_trades_seen"] = rc["recent_trades_seen"]
+        c["recent_volume_usd"] = round(rc["recent_volume_usd"])
+        c["recent_last_ts"] = rc["recent_last_ts"]
+        c["hours_since_recent_trade"] = round((now - rc["recent_last_ts"]) / 3600, 1) if rc["recent_last_ts"] else None
+        c["recently_active"] = True
+
+    for c in by_wallet.values():
+        c.setdefault("recently_active", False)
+        c.setdefault("recent_trades_seen", 0)
+        c.setdefault("recent_volume_usd", 0)
+        c.setdefault("hours_since_recent_trade", None)
+
     candidates = sorted(
         by_wallet.values(),
         key=lambda c: (bool(c["known_infra"]), c["likely_bot"], -len(c["seen_in"]), -c["realized_seen_usd"]),
@@ -130,5 +203,6 @@ async def _wallets_for_tokens(client: CoinGeckoClient, chain: str, source: str, 
         c["realized_seen_usd"] = round(c["realized_seen_usd"])
         c["bought_seen_usd"] = round(c["bought_seen_usd"])
         c["tokens_seen_in"] = len(c["seen_in"])
+        c.pop("recent_tokens", None)
 
     return {"chain": chain, "source": source, "tokens": tokens, "candidates": candidates}

@@ -49,3 +49,13 @@
 #follow-config-card{margin-bottom:16px}
 .run-delete-btn{color:#ff8a82;border-color:rgba(255,110,103,.35)}
 .run-delete-btn:hover{border-color:#ff6e67}
+
+/* --- fixed-height scroll for per-run tables, so many open positions/trades don't push the
+   next run instance far down the page --- */
+.table-scroll-fixed{max-height:260px;overflow-y:auto}
+.table-scroll-fixed thead th{position:sticky;top:0;background:var(--bg-elevated);z-index:1}
+
+/* --- recent-trades-derived recency signal on Radar candidates (complements the top_traders list) --- */
+.candidates-recent-filter{font-size:12px;color:var(--text-muted);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.candidate-badges{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.badge.recent{background:rgba(139,197,63,.16);color:var(--cg-green)}
