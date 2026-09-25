@@ -60,6 +60,44 @@ def read_equity(run_dir: str | Path) -> list[tuple[float, float]]:
     return json.loads(path.read_text()) if path.exists() else []
 
 
+def _downsample(values: list[float], n: int = 48) -> list[float]:
+    if len(values) <= n:
+        return [round(v, 4) for v in values]
+    step = (len(values) - 1) / (n - 1)
+    return [round(values[round(i * step)], 4) for i in range(n)]
+
+
+def summarize(path: Path) -> dict:
+    """One run card: mode, chain, P&L, win rate, drawdown, trades, credits, window and an equity sparkline."""
+    metrics = read_metrics(path)
+    core = metrics.get("blind") or metrics.get("metrics") or metrics
+    equity = read_equity(path)
+    window = metrics.get("covered_window") or {}
+    start = window.get("start_ts") or (equity[0][0] if equity else None)
+    end = window.get("end_ts") or (equity[-1][0] if equity else None)
+    wallets = metrics.get("selected_wallets") or metrics.get("addresses") or []
+    return {
+        "id": path.name,
+        "mode": metrics.get("mode") or path.name.rsplit("-", 1)[-1],
+        "chain": metrics.get("chain"),
+        "pnl_usd": core.get("pnl_usd"),
+        "pnl_pct": core.get("pnl_pct"),
+        "win_rate": core.get("win_rate"),
+        "max_drawdown_pct": core.get("max_drawdown_pct"),
+        "trades": core.get("trades"),
+        "credits_used": metrics.get("credits_used"),
+        "size_matched": metrics.get("size_matched"),
+        "wallets": len(wallets),
+        "start_ts": start,
+        "end_ts": end,
+        "interrupted": metrics.get("interrupted", False),
+        "spark": _downsample([e for _, e in equity]),
+        "has_metrics": bool(metrics),
+        "has_report": (path / "report.html").exists(),
+        "has_article_kit": (path / "article-kit" / "article-draft.md").exists(),
+    }
+
+
 def list_runs(base: str | Path = config.RUNS_DIR) -> list[dict]:
     """Every run directory, newest first, with its metrics and whether a report/article-kit already exists."""
     root = Path(base)
@@ -79,6 +117,22 @@ def list_runs(base: str | Path = config.RUNS_DIR) -> list[dict]:
             }
         )
     return out
+
+
+def run_cards(base: str | Path = config.RUNS_DIR) -> list[dict]:
+    """summarize() for every run directory, newest first."""
+    root = Path(base)
+    if not root.exists():
+        return []
+    return [summarize(p) for p in sorted(root.iterdir(), reverse=True) if p.is_dir()]
+
+
+def safe_run_dir(run_id: str, base: str | Path = config.RUNS_DIR) -> Path | None:
+    """runs/<run_id> if run_id is a plain directory name that exists, else None (no path traversal)."""
+    if not run_id or "/" in run_id or "\\" in run_id or run_id.startswith("."):
+        return None
+    path = Path(base) / run_id
+    return path if path.is_dir() else None
 
 
 def resolve_run_id(run_id: str, base: str | Path = config.RUNS_DIR) -> str:

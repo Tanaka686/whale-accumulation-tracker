@@ -107,3 +107,36 @@ def run(wallet_trade_rows: dict[str, list[dict]], budget_usd: float, assumptions
         "covered_window": windows_all,
         "scenarios": scenarios,
     }
+
+
+async def run_live(client, chain: str, addresses: list[str], budget_usd: float, assumptions: dict, max_pages: int = 10, on_progress=None):
+    """Fetches each wallet's trade history, runs the walk-forward backtest, and writes runs/<id>-backtest/.
+
+    Shared by `make backtest` and the Runs page's "Backtest selected wallets" button. Returns (run_dir, metrics).
+    """
+    from . import runs  # local import keeps this module importable without the runs dir
+
+    rows_by_wallet = {}
+    for i, address in enumerate(addresses):
+        rows_by_wallet[address] = await client.wallet_trades(chain, address, max_pages=max_pages)
+        if on_progress:
+            on_progress({"fetched": i + 1, "total": len(addresses), "credits": client.credits_used})
+    result = run(rows_by_wallet, budget_usd, assumptions)
+    run_dir = runs.new_run_dir("backtest")
+    blind = result["scenarios"]["blind"]["metrics"]
+    matched = result["scenarios"]["size_matched"]["metrics"]
+    metrics = {
+        "mode": "backtest",
+        "chain": chain,
+        "budget_usd": budget_usd,
+        "candidate_wallets": result["candidate_wallets"],
+        "selected_wallets": result["selected_wallets"],
+        "covered_window": result["covered_window"],
+        "blind": blind,
+        "size_matched": matched,
+        "credits_used": client.credits_used,
+    }
+    runs.write_metrics(run_dir, metrics)
+    runs.write_equity(run_dir, result["scenarios"]["blind"]["equity_curve"])
+    runs.write_trades_csv(run_dir, result["scenarios"]["blind"]["closed_trades"])
+    return run_dir, metrics

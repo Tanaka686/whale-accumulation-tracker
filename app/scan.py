@@ -2,7 +2,7 @@
 import asyncio
 
 from core.client import CoinGeckoClient
-from core.wallets import likely_bot_row
+from core.wallets import _f, likely_bot_row
 
 from . import config
 
@@ -34,12 +34,36 @@ async def _tokens_from_pools(client: CoinGeckoClient, chain: str, source: str, n
         if not address or address.lower() in seen:
             continue
         seen.add(address.lower())
-        name = attrs.get("name", "") or ""
-        symbol = name.split(" / ")[0] if " / " in name else name
-        tokens.append({"address": address, "symbol": symbol or _short(address), "pool": attrs.get("address")})
+        tokens.append(token_from_pool(p, address))
         if len(tokens) >= n_tokens:
             break
     return tokens
+
+
+def token_from_pool(p: dict, address: str) -> dict:
+    """One scanned token for the strip: logo, symbol, price, 1h/24h change, liquidity, volume, pool, DEX."""
+    attrs = p.get("attributes", {})
+    base = p.get("_base_token") or {}
+    name = attrs.get("name", "") or ""
+    symbol = base.get("symbol") or (name.split(" / ")[0] if " / " in name else name)
+    change = attrs.get("price_change_percentage") or {}
+    image = base.get("image_url")
+    return {
+        "address": address,
+        "symbol": symbol or _short(address),
+        "name": base.get("name"),
+        "image_url": image if image and "missing" not in image else None,
+        "pool": attrs.get("address"),
+        "pool_name": name,
+        "dex": p.get("_dex"),
+        "price_usd": _f(attrs.get("base_token_price_usd")),
+        "change_1h": _f(change.get("h1")),
+        "change_24h": _f(change.get("h24")),
+        "liquidity_usd": _f(attrs.get("reserve_in_usd")),
+        "volume_24h_usd": _f((attrs.get("volume_usd") or {}).get("h24")),
+        "fdv_usd": _f(attrs.get("fdv_usd")),
+        "pool_created_at": attrs.get("pool_created_at"),
+    }
 
 
 async def scan(client: CoinGeckoClient, chain: str, source: str, n_tokens: int = config.DEFAULT_TOP_N_TOKENS) -> dict:
@@ -75,11 +99,15 @@ async def scan(client: CoinGeckoClient, chain: str, source: str, n_tokens: int =
                     "label_hint": t.get("label") or t.get("name"),
                     "seen_in": [],
                     "realized_seen_usd": 0.0,
+                    "bought_seen_usd": 0.0,
                     "trades_seen": 0,
                     "likely_bot": False,
                 },
             )
-            c["seen_in"].append({"symbol": token["symbol"], "address": token["address"], "realized_usd": round(float(t.get("realized_pnl_usd") or 0))})
+            c["seen_in"].append(
+                {"symbol": token["symbol"], "address": token["address"], "image_url": token.get("image_url"), "realized_usd": round(float(t.get("realized_pnl_usd") or 0))}
+            )
+            c["bought_seen_usd"] += float(t.get("total_buy_usd") or 0)
             c["realized_seen_usd"] += float(t.get("realized_pnl_usd") or 0)
             c["trades_seen"] += (t.get("total_buy_count") or 0) + (t.get("total_sell_count") or 0)
             c["likely_bot"] = c["likely_bot"] or likely_bot_row(t)
@@ -90,6 +118,7 @@ async def scan(client: CoinGeckoClient, chain: str, source: str, n_tokens: int =
     )
     for c in candidates:
         c["realized_seen_usd"] = round(c["realized_seen_usd"])
+        c["bought_seen_usd"] = round(c["bought_seen_usd"])
         c["tokens_seen_in"] = len(c["seen_in"])
 
     return {"chain": chain, "source": source, "tokens": tokens, "candidates": candidates}

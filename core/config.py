@@ -51,6 +51,15 @@ WALLET_CHAIN_CAPS = {
 }
 
 
+# The multi-chain wallet endpoints (pnl, balances) take a `networks` list from one VM family per call.
+# This is the default EVM scope a wallet lookup asks for; the chain you're viewing is always added on
+# top, and networks the endpoint doesn't cover are simply ignored or answered with an error the UI shows.
+WALLET_EVM_NETWORKS = ["eth", "base", "bsc", "polygon_pos", "arbitrum", "optimism", "avax", "stable", "robinhood"]
+
+# Chains pinned to the top of the chain picker, in this order. Every other network follows A-Z.
+POPULAR_CHAINS = ["solana", "eth", "base", "bsc", "arbitrum", "polygon_pos", "robinhood", "optimism", "avax", "hyperevm", "sui-network", "ton", "tron", "unichain", "sonic", "abstract"]
+
+
 def wallet_caps(chain: str) -> dict:
     """What the wallet endpoints support for this chain."""
     return WALLET_CHAIN_CAPS.get(chain, _EVM_CAPS)

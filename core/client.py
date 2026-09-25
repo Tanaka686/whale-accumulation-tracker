@@ -150,24 +150,84 @@ class CoinGeckoClient:
 
     # ---- discovery ----
 
+    @staticmethod
+    def _with_included(d: dict) -> list[dict]:
+        """A pool list with each pool's included base token / dex attached as `_base_token` / `_dex`."""
+        included = {i.get("id"): i.get("attributes", {}) for i in d.get("included", []) or []}
+        pools = d.get("data", []) or []
+        for p in pools:
+            rel = p.get("relationships") or {}
+            base_id = ((rel.get("base_token") or {}).get("data") or {}).get("id")
+            dex_id = ((rel.get("dex") or {}).get("data") or {}).get("id")
+            if base_id in included:
+                p["_base_token"] = included[base_id]
+            if dex_id:
+                p["_dex"] = (included.get(dex_id) or {}).get("name") or dex_id
+        return pools
+
     async def trending_pools(self, network: str, duration: str = "1h", n: int = 20) -> list[dict]:
-        """Trending pools on a network."""
+        """Trending pools on a network (each with `_base_token` attached)."""
         d = await self.get(
             f"/onchain/networks/{network}/trending_pools",
-            {"include": "base_token", "duration": duration, "page": 1},
+            {"include": "base_token,dex", "duration": duration, "page": 1},
             ttl=config.TRENDING_TTL_S,
         )
-        return d.get("data", [])[:n]
+        return self._with_included(d)[:n]
 
     async def new_pools(self, network: str, n: int = 20) -> list[dict]:
-        """Newest pools on a network."""
-        d = await self.get(f"/onchain/networks/{network}/new_pools", {"include": "base_token", "page": 1}, ttl=config.TRENDING_TTL_S)
-        return d.get("data", [])[:n]
+        """Newest pools on a network (each with `_base_token` attached)."""
+        d = await self.get(f"/onchain/networks/{network}/new_pools", {"include": "base_token,dex", "page": 1}, ttl=config.TRENDING_TTL_S)
+        return self._with_included(d)[:n]
 
     async def megafilter(self, **filters) -> list[dict]:
-        """Pools matching arbitrary /onchain/pools/megafilter filters."""
+        """Pools matching arbitrary /onchain/pools/megafilter filters (each with `_base_token` attached)."""
+        filters.setdefault("include", "base_token,dex")
         d = await self.get("/onchain/pools/megafilter", filters, ttl=config.TRENDING_TTL_S)
-        return d.get("data", [])
+        return self._with_included(d)
+
+    async def search_pools(self, query: str, network: str | None = None) -> list[dict]:
+        """Pools matching a name, ticker, token address or pool address, optionally on one network."""
+        params = {"query": query, "include": "base_token,quote_token,dex", "page": 1}
+        if network:
+            params["network"] = network
+        d = await self.get("/onchain/search/pools", params, ttl=60)
+        return self._with_included(d)
+
+    async def networks_page(self, page: int = 1) -> dict:
+        """One page (100) of every onchain network, raw, including `links.next`."""
+        return await self.get("/onchain/networks", {"page": page}, ttl=config.STABLE_TTL_S)
+
+    async def asset_platforms(self) -> list[dict]:
+        """Every CoinGecko asset platform (chain) with its logo images."""
+        return await self.get("/asset_platforms", ttl=config.STABLE_TTL_S)
+
+    async def token(self, network: str, address: str) -> dict:
+        """A token's market data plus its top pools: {"attributes": ..., "pools": [...]}."""
+        d = await self.get(f"/onchain/networks/{network}/tokens/{address}", {"include": "top_pools"}, ttl=30)
+        pools = [i for i in d.get("included", []) or [] if i.get("type") == "pool"]
+        return {"attributes": (d.get("data") or {}).get("attributes", {}), "pools": pools}
+
+    async def tokens_multi(self, network: str, addresses: list[str]) -> list[dict]:
+        """Token attributes (symbol, name, image_url, price) for up to 30 addresses per call."""
+        out = []
+        for i in range(0, len(addresses), 30):
+            chunk = addresses[i : i + 30]
+            d = await self.get(f"/onchain/networks/{network}/tokens/multi/{','.join(chunk)}", ttl=3600)
+            out += [t.get("attributes", {}) for t in d.get("data", []) or []]
+        return out
+
+    async def token_prices(self, network: str, addresses: list[str]) -> dict[str, float]:
+        """Current USD price per token address (lowercased keys), via the onchain simple price endpoint."""
+        prices: dict[str, float] = {}
+        for i in range(0, len(addresses), 30):
+            chunk = addresses[i : i + 30]
+            d = await self.get(f"/onchain/simple/networks/{network}/token_price/{','.join(chunk)}", ttl=10)
+            for k, v in (((d.get("data") or {}).get("attributes") or {}).get("token_prices") or {}).items():
+                try:
+                    prices[k.lower()] = float(v)
+                except (TypeError, ValueError):
+                    pass
+        return prices
 
     async def pools_multi(self, network: str, addresses: list[str]) -> list[dict]:
         """Batch pool lookup, chunked to the API's 30-address limit."""
@@ -258,25 +318,37 @@ class CoinGeckoClient:
 
     # ---- wallets ----
 
-    async def wallet_pnl(self, address: str, networks: list[str]) -> dict:
-        """Realized/unrealized PnL across the networks that support the pnl endpoint."""
+    async def wallet_pnl(self, address: str, networks: list[str], per_page: int | None = None, sort: str | None = None) -> dict:
+        """Realized/unrealized PnL across the networks that support the pnl endpoint (one VM family per call)."""
         nets = [n for n in networks if config.wallet_caps(n).get("pnl")]
-        d = await self.get(f"/onchain/wallets/{address}/pnl", {"networks": ",".join(nets)}, ttl=300)
+        params: dict = {"networks": ",".join(nets)}
+        if per_page:
+            params["per_page"] = per_page
+        if sort:
+            params["sort"] = sort
+        d = await self.get(f"/onchain/wallets/{address}/pnl", params, ttl=300)
         return d.get("data", {}).get("attributes", {})
 
-    async def wallet_trades(self, network: str, address: str, max_pages: int = config.DEFAULT_MAX_PAGES) -> list[dict]:
+    async def wallet_trades(self, network: str, address: str, max_pages: int = config.DEFAULT_MAX_PAGES, per_page: int | None = None) -> list[dict]:
         """Cursor-paginated swap history for a wallet on one network."""
-        return await self._paginate(f"/onchain/networks/{network}/wallets/{address}/trades", {}, max_pages)
+        params = {"per_page": per_page} if per_page else {}
+        return await self._paginate(f"/onchain/networks/{network}/wallets/{address}/trades", params, max_pages)
 
-    async def wallet_balances(self, address: str, networks: list[str]) -> dict:
-        """Current token balances across the EVM networks that support the balances endpoint."""
+    async def wallet_balances(self, address: str, networks: list[str], per_page: int | None = None, value_usd_min: float | None = None) -> dict:
+        """Current token balances across the networks that support the balances endpoint."""
         nets = [n for n in networks if config.wallet_caps(n).get("balances")]
-        d = await self.get(f"/onchain/wallets/{address}/balances", {"networks": ",".join(nets)})
+        params: dict = {"networks": ",".join(nets)}
+        if per_page:
+            params["per_page"] = per_page
+        if value_usd_min is not None:
+            params["value_usd_min"] = value_usd_min
+        d = await self.get(f"/onchain/wallets/{address}/balances", params, ttl=60)
         return d.get("data", {}).get("attributes", {})
 
-    async def wallet_transfers(self, network: str, address: str, max_pages: int = config.DEFAULT_MAX_PAGES) -> list[dict]:
-        """Cursor-paginated raw transfers for a wallet on one network (30-day window)."""
-        return await self._paginate(f"/onchain/networks/{network}/wallets/{address}/transfers", {}, max_pages)
+    async def wallet_transfers(self, network: str, address: str, max_pages: int = config.DEFAULT_MAX_PAGES, per_page: int | None = None) -> list[dict]:
+        """Cursor-paginated raw transfers for a wallet on one network (7-day default window)."""
+        params = {"per_page": per_page} if per_page else {}
+        return await self._paginate(f"/onchain/networks/{network}/wallets/{address}/transfers", params, max_pages)
 
     # ---- account + market ----
 
