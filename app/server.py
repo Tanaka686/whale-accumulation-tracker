@@ -142,7 +142,7 @@ def recorder(demo: str, tag: str) -> Recorder:
 
 # ---------- pages ----------
 
-PAGES = {"/": "index.html", "/xray": "xray.html", "/wallet": "wallet.html", "/follow": "follow.html", "/runs": "runs.html", "/kit": "kit.html"}
+PAGES = {"/": "index.html", "/xray": "index.html", "/wallet": "index.html", "/follow": "index.html", "/runs": "index.html", "/kit": "index.html"}
 
 
 def _page(name: str):

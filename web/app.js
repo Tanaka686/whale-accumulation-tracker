@@ -1,330 +1,37 @@
-// Smart Money Radar UI. Plain JS, no build step, no framework.
-
-const state = {
-  capabilities: null,
-  config: null,
-  scan: null,
-  wallets: [],
-  followSelection: new Set(),
-  recording: new URLSearchParams(location.search).has("record"),
-};
-
-function $(sel) { return document.querySelector(sel); }
-function $all(sel) { return Array.from(document.querySelectorAll(sel)); }
-
-async function api(path, opts) {
-  const res = await fetch(path, opts);
-  return res.json();
-}
-
-function fmtUsd(n) {
-  if (n === null || n === undefined) return "--";
-  return (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
-
-function fmtPct(n) {
-  if (n === null || n === undefined) return "--";
-  return `${n > 0 ? "+" : ""}${n}%`;
-}
-
-// ---- tabs ----
-
-function initTabs() {
-  $all("nav.tabs button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      $all("nav.tabs button").forEach((b) => b.classList.remove("active"));
-      $all(".panel").forEach((p) => p.classList.remove("active"));
-      btn.classList.add("active");
-      $(`#panel-${btn.dataset.tab}`).classList.add("active");
-      if (btn.dataset.tab === "runs") loadRuns();
-    });
-  });
-}
-
-// ---- capabilities / locked state ----
-
-function lockedCardHtml(message, upgradeUrl) {
-  return `<div class="locked-card">
-    <p>🔒 ${message}</p>
-    <a href="${upgradeUrl}" target="_blank" rel="noopener">See plans →</a>
-  </div>`;
-}
-
-async function loadCapabilities() {
-  state.capabilities = await api("/api/capabilities");
-  state.config = await api("/api/config");
-  const chainSel = $("#scan-chain");
-  chainSel.innerHTML = state.config.chains.map((c) => `<option value="${c}">${c}</option>`).join("");
-  const sourceSel = $("#scan-source");
-  sourceSel.innerHTML = Object.entries(state.config.sources).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
-
-  if (!state.capabilities.analyst) {
-    $("#scan-form").style.display = "none";
-    $("#scan-locked").innerHTML = lockedCardHtml(
-      "Scan needs top-trader and top-holder data to profile wallets. That is available on the Analyst plan and up.",
-      state.capabilities.upgrade_url,
-    );
-    $("#scan-locked").style.display = "block";
-    $("#wallets-locked").innerHTML = lockedCardHtml("Wallet profiling needs an Analyst plan or higher.", state.capabilities.upgrade_url);
-    $("#wallets-locked").style.display = "block";
-    $("#follow-locked").innerHTML = lockedCardHtml("Following wallets needs an Analyst plan or higher.", state.capabilities.upgrade_url);
-    $("#follow-locked").style.display = "block";
-  } else {
-    $("#scan-form").style.display = "";
-    $("#scan-locked").style.display = "none";
-    $("#wallets-locked").style.display = "none";
-    $("#follow-locked").style.display = "none";
-  }
-
-  const assumptions = state.config.assumptions;
-  $("#assumptions-body").innerHTML = `
-    <div class="stat-grid">
-      <div class="stat"><div class="label">Slippage</div><div class="value">${assumptions.slippage_bps} bps</div></div>
-      <div class="stat"><div class="label">Fee</div><div class="value">${assumptions.fee_bps} bps</div></div>
-      <div class="stat"><div class="label">Max position</div><div class="value">${Math.round(assumptions.max_position_pct * 100)}%</div></div>
-      <div class="stat"><div class="label">Cooldown</div><div class="value">${assumptions.cooldown_s}s</div></div>
-    </div>
-    <p class="assumptions-note">${assumptions.latency_note} Edit <code>assumptions.yaml</code> to change these.</p>
-  `;
-}
-
-// ---- Scan tab ----
-
-function tokenChips(tokens) {
-  return tokens.map((t) => `<span class="chip">${t.symbol}</span>`).join(" ");
-}
-
-function candidateRow(c) {
-  const botBadge = c.likely_bot ? `<span class="badge-pill badge-bot_like">bot-like</span>` : "";
-  return `<tr>
-    <td><input type="checkbox" class="cand-check" data-address="${c.address}" ${c.likely_bot ? "" : "checked"}></td>
-    <td>${c.short}</td>
-    <td>${c.tokens_seen_in}</td>
-    <td>${fmtUsd(c.realized_seen_usd)}</td>
-    <td>${botBadge}</td>
-  </tr>`;
-}
-
-async function runScan() {
-  const chain = $("#scan-chain").value;
-  const source = $("#scan-source").value;
-  const n_tokens = parseInt($("#scan-n-tokens").value, 10);
-  $("#scan-status").textContent = "Scanning...";
-  const result = await api("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chain, source, n_tokens }) });
-  if (result.locked) {
-    $("#scan-status").textContent = "";
-    $("#scan-results").innerHTML = lockedCardHtml(result.feature, result.upgrade_url);
-    return;
-  }
-  state.scan = result;
-  $("#scan-status").textContent = `${result.tokens.length} tokens, ${result.candidates.length} candidate wallets`;
-  $("#scan-results").innerHTML = `
-    <div class="card">
-      <h3>Tokens scanned</h3>
-      <div class="row">${tokenChips(result.tokens)}</div>
-    </div>
-    <div class="card">
-      <div class="row" style="justify-content: space-between;">
-        <h3>Candidate wallets</h3>
-        <button class="primary" id="profile-btn">Profile selected →</button>
-      </div>
-      <table>
-        <thead><tr><th></th><th>Wallet</th><th>Tokens seen in</th><th>Realized PnL (seen)</th><th></th></tr></thead>
-        <tbody>${result.candidates.slice(0, 60).map(candidateRow).join("")}</tbody>
-      </table>
-    </div>
-  `;
-  $("#profile-btn").addEventListener("click", profileSelected);
-}
-
-async function profileSelected() {
-  const addresses = $all(".cand-check:checked").map((el) => el.dataset.address).slice(0, state.config.defaults.wallets_profiled);
-  const budget = parseFloat($("#follow-budget") ? $("#follow-budget").value : state.config.defaults.budget_usd) || state.config.defaults.budget_usd;
-  document.querySelector('nav.tabs button[data-tab="wallets"]').click();
-  $("#wallets-status").textContent = `Profiling ${addresses.length} wallet(s)...`;
-  const chain = $("#scan-chain").value;
-  const profiles = await api("/api/wallets/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chain, addresses, budget }) });
-  state.wallets = Array.isArray(profiles) ? profiles.filter((p) => !p.error) : [];
-  $("#wallets-status").textContent = `${state.wallets.length} wallet(s) profiled`;
-  renderWallets();
-}
-
-// ---- Wallets tab ----
-
-function walletRow(w) {
-  const checked = state.followSelection.has(w.address) ? "checked" : "";
-  return `<tr class="clickable" data-address="${w.address}">
-    <td><input type="checkbox" class="follow-check" data-address="${w.address}" ${checked}></td>
-    <td>${w.address.slice(0, 6)}...${w.address.slice(-4)}</td>
-    <td><span class="badge-pill badge-${w.label}">${w.label.replace("_", " ")}</span></td>
-    <td>${w.skill_score}</td>
-    <td>${w.copyability}</td>
-    <td>${w.days_since_last_trade ?? "--"}d</td>
-  </tr>`;
-}
-
-function renderWallets() {
-  let list = state.wallets;
-  const labelFilter = $("#wallet-filter-label").value;
-  if (labelFilter !== "all") list = list.filter((w) => w.label === labelFilter);
-  if ($("#wallet-filter-copyable").checked) list = list.filter((w) => w.copyability >= 50);
-  list = [...list].sort((a, b) => b.skill_score - a.skill_score);
-  $("#wallets-table-body").innerHTML = list.map(walletRow).join("") || `<tr><td colspan="6" class="empty-note">No wallets yet -- scan first.</td></tr>`;
-  $all(".follow-check").forEach((el) => el.addEventListener("click", (e) => e.stopPropagation()));
-  $all(".follow-check").forEach((el) =>
-    el.addEventListener("change", (e) => {
-      if (e.target.checked) state.followSelection.add(e.target.dataset.address);
-      else state.followSelection.delete(e.target.dataset.address);
-      updateFollowCount();
-    }),
-  );
-  $all("tr.clickable").forEach((tr) => tr.addEventListener("click", () => openDrawer(tr.dataset.address)));
-}
-
-function updateFollowCount() {
-  $("#follow-count").textContent = state.followSelection.size;
-}
-
-async function openDrawer(address) {
-  const chain = $("#scan-chain").value;
-  $("#drawer-backdrop").classList.add("open");
-  $("#drawer-body").innerHTML = "<p>Loading...</p>";
-  const d = await api(`/api/wallets/${address}/drawer?chain=${chain}`);
-  if (d.locked) {
-    $("#drawer-body").innerHTML = lockedCardHtml(d.feature, d.upgrade_url);
-    return;
-  }
-  const caps = d.capabilities || {};
-  const holdingsSection = caps.balances
-    ? `<h3>Holdings</h3>
-    <table><tbody>${(d.holdings || []).map((h) => `<tr><td>${h.symbol || "?"}</td><td>${fmtUsd(h.value_usd)}</td></tr>`).join("") || "<tr><td class='empty-note'>None on this chain</td></tr>"}</tbody></table>`
-    : "";
-  const tradesSection = caps.trades
-    ? `<h3>Recent trades</h3>
-    <table><tbody>${(d.recent_trades || []).slice(0, 10).map((t) => `<tr><td>${t.kind}</td><td>${fmtUsd(t.usd)}</td></tr>`).join("") || "<tr><td class='empty-note'>No recent trades</td></tr>"}</tbody></table>`
-    : "";
-  $("#drawer-body").innerHTML = `
-    <h2>${address.slice(0, 8)}...${address.slice(-6)}</h2>
-    <div class="stat-grid">
-      <div class="stat"><div class="label">Lifetime realized</div><div class="value ${d.lifetime_realized_pnl_usd >= 0 ? "up" : "down"}">${fmtUsd(d.lifetime_realized_pnl_usd)}</div></div>
-      <div class="stat"><div class="label">Tokens traded</div><div class="value">${d.tokens_traded ?? "--"}</div></div>
-    </div>
-    ${holdingsSection}
-    <h3>Top performance by token</h3>
-    <table><tbody>${(d.performance || []).slice(0, 8).map((p) => `<tr><td>${p.symbol || "?"}</td><td class="${(p.realized_pnl_usd || 0) >= 0 ? "up" : "down"}">${fmtUsd(p.realized_pnl_usd)}</td></tr>`).join("")}</tbody></table>
-    ${tradesSection}
-  `;
-}
-
-function closeDrawer() {
-  $("#drawer-backdrop").classList.remove("open");
-}
-
-// ---- Follow tab ----
-
-let followPoll = null;
-
-async function startFollow() {
-  const chain = $("#scan-chain").value;
-  const budget = parseFloat($("#follow-budget").value) || state.config.defaults.budget_usd;
-  const poll_s = parseFloat($("#follow-poll-s").value) || state.config.defaults.poll_s;
-  let addresses = Array.from(state.followSelection);
-  if (addresses.length === 0 && state.wallets.length) {
-    addresses = [...state.wallets].sort((a, b) => b.copyability - a.copyability).slice(0, 5).map((w) => w.address);
-  }
-  const result = await api("/api/follow/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chain, addresses, budget, poll_s }) });
-  if (result.locked) {
-    $("#follow-status-panel").innerHTML = lockedCardHtml(result.feature, result.upgrade_url);
-    return;
-  }
-  $("#follow-start").disabled = true;
-  $("#follow-stop").disabled = false;
-  pollFollowStatus();
-  followPoll = setInterval(pollFollowStatus, 4000);
-}
-
-async function stopFollow() {
-  await api("/api/follow/stop", { method: "POST" });
-  $("#follow-start").disabled = false;
-  $("#follow-stop").disabled = true;
-  if (followPoll) clearInterval(followPoll);
-}
-
-async function pollFollowStatus() {
-  const status = await api("/api/follow/status");
-  if (!status.following) {
-    $("#follow-status-panel").innerHTML = `<p class="empty-note">Not following yet. Pick wallets in the Wallets tab, or use the auto-picked top 5.</p>`;
-    return;
-  }
-  const m = status.metrics;
-  $("#follow-status-panel").innerHTML = `
-    <div class="stat-grid">
-      <div class="stat"><div class="label">PnL</div><div class="value ${m.pnl_usd >= 0 ? "up" : "down"}">${fmtUsd(m.pnl_usd)}</div></div>
-      <div class="stat"><div class="label">PnL %</div><div class="value ${m.pnl_pct >= 0 ? "up" : "down"}">${fmtPct(m.pnl_pct)}</div></div>
-      <div class="stat"><div class="label">Trades</div><div class="value">${m.trades}</div></div>
-      <div class="stat"><div class="label">Win rate</div><div class="value">${m.win_rate ?? "--"}</div></div>
-      <div class="stat"><div class="label">Max drawdown</div><div class="value">${m.max_drawdown_pct}%</div></div>
-    </div>
-    <p class="assumptions-note">${status.latency_note}</p>
-    <h3>Recent decisions</h3>
-    <table><tbody>${(status.recent_decisions || []).slice().reverse().map((d) => `<tr><td>${d.action}</td><td>${d.token || ""}</td><td>${d.reason || d.error || ""}</td></tr>`).join("") || "<tr><td class='empty-note'>No trades mirrored yet</td></tr>"}</tbody></table>
-  `;
-}
-
-// ---- Runs tab ----
-
-async function loadRuns() {
-  const list = await api("/api/runs");
-  $("#runs-table-body").innerHTML =
-    list
-      .map(
-        (r) => `<tr>
-      <td>${r.id}</td>
-      <td>${r.mode}</td>
-      <td>${r.metrics?.pnl_pct ?? r.metrics?.blind?.pnl_pct ?? "--"}</td>
-      <td>${r.metrics?.credits_used ?? "--"}</td>
-      <td><button class="ghost run-report" data-id="${r.id}">Report</button> <button class="ghost run-article" data-id="${r.id}">Article kit</button></td>
-    </tr>`,
-      )
-      .join("") || `<tr><td colspan="5" class="empty-note">No runs yet. Try "make backtest" or "make forward".</td></tr>`;
-  $all(".run-report").forEach((btn) =>
-    btn.addEventListener("click", async () => {
-      const r = await api(`/api/runs/${btn.dataset.id}/report`, { method: "POST" });
-      alert(`Report written: ${r.html}`);
-    }),
-  );
-  $all(".run-article").forEach((btn) =>
-    btn.addEventListener("click", async () => {
-      const handle = prompt("Your handle (for the cover image)?", "yourhandle") || "yourhandle";
-      const r = await api(`/api/runs/${btn.dataset.id}/article-kit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle }) });
-      alert(`Article kit written: ${r.article_draft}`);
-    }),
-  );
-}
-
-// ---- init ----
-
-document.addEventListener("DOMContentLoaded", async () => {
-  if (state.recording) document.body.classList.add("recording");
-  initTabs();
-  window.CGBrand.renderBadge($("#cg-badge"));
-  window.CGBrand.renderFooter($("#cg-footer"));
-  await loadCapabilities();
-  $("#scan-run").addEventListener("click", runScan);
-  $("#wallet-filter-label").addEventListener("change", renderWallets);
-  $("#wallet-filter-copyable").addEventListener("change", renderWallets);
-  $("#follow-auto-pick").addEventListener("click", () => {
-    state.followSelection = new Set([...state.wallets].sort((a, b) => b.copyability - a.copyability).slice(0, 5).map((w) => w.address));
-    updateFollowCount();
-    renderWallets();
-  });
-  $("#follow-start").addEventListener("click", startFollow);
-  $("#follow-stop").addEventListener("click", stopFollow);
-  $("#drawer-close").addEventListener("click", closeDrawer);
-  $("#drawer-backdrop").addEventListener("click", (e) => {
-    if (e.target.id === "drawer-backdrop") closeDrawer();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && $("#drawer-backdrop").classList.contains("open")) closeDrawer();
-  });
-});
+/* Smart Money Radar: a deliberately plain, inspectable UI. */
+const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const usd = (v, signed=false) => v == null ? "—" : `${v < 0 ? "−" : signed && v > 0 ? "+" : ""}$${Math.abs(Number(v)).toLocaleString(undefined,{maximumFractionDigits:2})}`;
+const compact = (v) => v == null ? "—" : `$${Intl.NumberFormat("en",{notation:"compact",maximumFractionDigits:1}).format(Number(v))}`;
+const pct = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${Number(v).toFixed(Math.abs(v)<10?1:0)}%`;
+const short = (v) => v ? `${v.slice(0,6)}…${v.slice(-5)}` : "—";
+const avatar = (image, label="?") => image ? `<img class="avatar" src="${esc(image)}" alt="">` : `<span class="avatar token-fallback">${esc(label.slice(0,2).toUpperCase())}</span>`;
+const state = { caps:null, config:null, chains:[], scan:null, wallets:[], selected:new Set(), followTimer:null };
+async function api(path, opts){ const r=await fetch(path,opts); return r.json(); }
+function lockedCard(x){ return `<div class="locked-card"><div class="lock-icon">◈</div><b>${esc(x.feature||x.message||"This capability is plan-gated")}</b><a href="${esc(x.upgrade_url||state.caps?.upgrade_url||"https://www.coingecko.com/en/api/pricing")}" target="_blank" rel="noopener">View plans ↗</a></div>`; }
+function tab(name){ $$('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name)); $$('.panel').forEach(p=>p.classList.toggle('active',p.id===`panel-${name}`)); if(name==='runs') loadRuns(); }
+function initTabs(){ $$('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.tab)); }
+function chainImage(id){ return state.chains.find(c=>c.id===id)?.image; }
+function chainOption(c){ return `<option value="${esc(c.id)}">${esc(c.name)}</option>`; }
+function renderChainResults(q=""){ const rows=state.chains.filter(c=>!q||`${c.name} ${c.id}`.toLowerCase().includes(q.toLowerCase())).slice(0,12); $('#chain-results').innerHTML=rows.length?rows.map(c=>`<button class="chain-chip" data-chain="${esc(c.id)}">${c.image?`<img src="${esc(c.image)}">`:'◉'} ${esc(c.name)}</button>`).join(''):`<span class="muted">No matching network.</span>`; $$('.chain-chip').forEach(b=>b.onclick=()=>{ $('#scan-chain').value=b.dataset.chain; $('#scan-chain-search').value=state.chains.find(c=>c.id===b.dataset.chain)?.name||b.dataset.chain; renderChainResults($('#scan-chain-search').value); }); }
+async function boot(){ initTabs(); window.CGBrand.renderBadge($('#cg-badge')); window.CGBrand.renderFooter($('#cg-footer')); state.caps=await api('/api/capabilities'); state.config=await api('/api/config'); state.chains=await api('/api/chains'); $('#hero-chain-count').textContent=state.chains.length||'250+'; $('#scan-chain').innerHTML=state.chains.map(chainOption).join(''); $('#scan-chain').value=state.config.default_chain||'solana'; $('#scan-source').innerHTML=Object.entries(state.config.sources||{}).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join(''); $('#scan-chain-search').value=state.chains.find(c=>c.id===$('#scan-chain').value)?.name||'Solana'; $('#scan-chain-search').oninput=e=>renderChainResults(e.target.value); $('#scan-chain').onchange=e=>{ $('#scan-chain-search').value=state.chains.find(c=>c.id===e.target.value)?.name||e.target.value; renderChainResults(e.target.value); }; renderChainResults(''); renderAssumptions(state.config.assumptions||{}); bindActions(); if(!state.caps.analyst) $('#scan-locked').innerHTML=lockedCard({feature:'Radar scanning and wallet profiling need the Analyst plan or higher.'}); else $('#scan-locked').innerHTML=''; if(location.pathname==='/runs') tab('runs'); if(location.pathname==='/follow') tab('follow'); if(location.pathname==='/xray' && new URLSearchParams(location.search).get('token')) showXrayPage(); }
+function bindActions(){ $('#scan-run').onclick=runScan; $('#wallet-filter-label').onchange=renderWallets; $('#wallet-filter-copyable').onchange=renderWallets; $('#wallet-open').onclick=()=>openProfile($('#wallet-address').value.trim()); $('#follow-auto-pick').onclick=autoPick; $('#follow-start').onclick=startFollow; $('#follow-stop').onclick=stopFollow; $('#drawer-close').onclick=closeDrawer; $('#drawer-backdrop').onclick=e=>{if(e.target.id==='drawer-backdrop')closeDrawer()}; document.onkeydown=e=>{if(e.key==='Escape')closeDrawer()}; }
+async function runScan(){ if(!state.caps?.analyst){$('#scan-results').innerHTML=lockedCard({feature:'Radar scanning is plan-gated.'});return;} const btn=$('#scan-run'); btn.disabled=true; $('#scan-status').textContent='Reading movers, traders, and holders…'; const result=await api('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chain:$('#scan-chain').value,source:$('#scan-source').value,n_tokens:+$('#scan-n-tokens').value})}); btn.disabled=false; if(result.locked){$('#scan-results').innerHTML=lockedCard(result);return;} if(result.unavailable){$('#scan-status').textContent='This source is unavailable on the selected network.';return;} state.scan=result; $('#scan-status').textContent=`${result.tokens?.length||0} tokens · ${result.candidates?.length||0} candidate wallets`; $('#scan-credits').textContent=`${result.credits??'—'} REST credits · ${result.elapsed_ms??'—'} ms`; $('#scan-results').innerHTML=`<div class="card token-strip"><div class="card-title">Tokens in this scan</div><div class="token-cards">${(result.tokens||[]).map(t=>`<button class="token-card" onclick="openToken('${esc(t.address||'')}')">${avatar(t.image,t.symbol||'?')}<span><b>${esc(t.symbol||t.name||'?')}</b><small>${compact(t.volume_24h_usd||t.volume_usd)}</small></span><strong class="${(t.change_24h||0)>=0?'up':'down'}">${pct(t.change_24h)}</strong></button>`).join('')}</div></div><div class="card"><div class="table-head"><span>RADAR CANDIDATES</span><button class="primary" id="profile-btn">Profile selected ↗</button></div><div class="candidate-grid">${(result.candidates||[]).slice(0,80).map(candidate).join('')}</div></div>`; $('#profile-btn').onclick=profileSelected; }
+function candidate(c){ const checked=c.likely_bot?'':'checked'; const tokens=(c.seen_in||[]).slice(0,4).map(t=>avatar(t.image,t.symbol||'?')).join(''); return `<label class="candidate"><input type="checkbox" class="cand-check" data-address="${esc(c.address)}" ${checked}><div class="avatar-stack">${tokens||avatar('',c.short||'?')}</div><div class="candidate-main"><b>${esc(c.short||short(c.address))}</b><span>${esc(c.address||'')}</span></div><div class="candidate-stat"><small>SEEN IN</small><b>${c.tokens_seen_in??c.seen_in?.length??0} tokens</b></div><div class="candidate-stat"><small>REALIZED</small><b class="${(c.realized_seen_usd||0)>=0?'up':'down'}">${usd(c.realized_seen_usd,true)}</b></div>${c.likely_bot?'<span class="badge bot">bot-like</span>':'<span class="badge good">candidate</span>'}</label>`; }
+async function profileSelected(){ const addrs=$$('.cand-check:checked').map(x=>x.dataset.address).slice(0,state.config.defaults.wallets_profiled||30); if(!addrs.length)return; $('#wallets-status')?.remove(); tab('wallets'); $('#wallets-table-body').innerHTML='<tr><td colspan="7" class="empty-note">Profiling wallets as results arrive…</td></tr>'; state.wallets=[]; const url=`/api/radar/profile?chain=${encodeURIComponent($('#scan-chain').value)}&ids=${encodeURIComponent(addrs.join(','))}&budget=${$('#follow-budget')?.value||100}`; const r=await fetch(url); const reader=r.body.getReader(), dec=new TextDecoder(); let buf=''; while(true){const {value,done}=await reader.read(); if(done)break; buf+=dec.decode(value); for(const block of buf.split('\n\n').slice(0,-1)){const m=block.match(/event: (\w+)\ndata: (.*)/s); if(!m)continue; const d=JSON.parse(m[2]); if(m[1]==='wallet'&&!d.error){state.wallets.push(d); renderWallets();}} buf=buf.split('\n\n').pop();} $('#wallet-count').textContent=state.wallets.length; }
+function walletRow(w){ const selected=state.selected.has(w.address)?'checked':''; return `<tr class="clickable" data-address="${esc(w.address)}"><td><input class="follow-check" data-address="${esc(w.address)}" type="checkbox" ${selected}></td><td><div class="wallet-id"><span class="wallet-orb">◈</span><span><b>${esc(short(w.address))}</b><small>${esc(w.chain||'auto')}</small></span></div></td><td><span class="badge ${w.label==='proven_trader'?'good':w.label==='bot_like'?'bot':'neutral'}">${esc((w.label||'unclassified').replaceAll('_',' '))}</span></td><td><b>${w.skill_score??'—'}</b><div class="bar"><i style="width:${Math.min(100,w.skill_score||0)}%"></i></div></td><td><b>${w.copyability??'—'}</b><div class="bar green"><i style="width:${Math.min(100,w.copyability||0)}%"></i></div></td><td class="${(w.lifetime_realized_pnl_usd||w.realized_pnl_usd||0)>=0?'up':'down'}">${usd(w.lifetime_realized_pnl_usd??w.realized_pnl_usd,true)}</td><td>${w.days_since_last_trade==null?'—':`${w.days_since_last_trade}d ago`}</td></tr>`; }
+function renderWallets(){ let rows=state.wallets; const label=$('#wallet-filter-label').value; if(label!=='all')rows=rows.filter(w=>w.label===label); if($('#wallet-filter-copyable').checked)rows=rows.filter(w=>(w.copyability||0)>=50); $('#wallets-table-body').innerHTML=rows.sort((a,b)=>(b.skill_score||0)-(a.skill_score||0)).map(walletRow).join('')||'<tr><td colspan="7" class="empty-note">No profiles match these filters.</td></tr>'; $$('.clickable').forEach(tr=>tr.onclick=e=>{if(e.target.matches('input'))return;openProfile(tr.dataset.address)}); $$('.follow-check').forEach(i=>i.onchange=e=>{if(e.target.checked)state.selected.add(e.target.dataset.address);else state.selected.delete(e.target.dataset.address);}); $('#wallet-count').textContent=state.wallets.length; }
+async function openProfile(address){ if(!address)return; $('#drawer-backdrop').classList.add('open'); $('#drawer-body').innerHTML='<div class="loading"><span class="spinner"></span> Loading wallet profile…</div>'; const d=await api(`/api/wallet/profile?address=${encodeURIComponent(address)}&chain=auto`); if(d.locked){$('#drawer-body').innerHTML=lockedCard(d);return;} renderProfile(d); }
+function sectionNotice(status,label){ return status==='ok'?'':`<div class="cap-notice">${label} data is ${status||'unavailable'} on this wallet/network.</div>`; }
+function renderProfile(d){ const p=d.profile||{}; $('#drawer-body').innerHTML=`<div class="drawer-kicker">WALLET PROFILE · ${esc(d.chain||'auto')}</div><h2>${esc(short(d.address))}</h2><div class="drawer-actions"><button class="primary" id="drawer-follow">${d.following?'Following':'Follow wallet'}</button><button class="ghost" onclick="navigator.clipboard?.writeText('${esc(d.address)}')">Copy address</button></div><div class="metric-grid compact-grid"><div><small>LIFETIME P&amp;L</small><b class="${(p.realized_pnl_usd||d.performance?.[0]?.realized_pnl_usd||0)>=0?'up':'down'}">${usd(p.realized_pnl_usd,true)}</b></div><div><small>SKILL SCORE</small><b>${p.skill_score??'—'}</b></div><div><small>TRADES</small><b>${d.trades?.length??'—'}</b></div></div><div class="profile-tabs"><button class="active" data-view="holdings">Holdings</button><button data-view="performance">Performance</button><button data-view="trades">Trades</button><button data-view="transfers">Transfers</button><button data-view="chains">By chain</button></div><div id="profile-content">${profileView(d,'holdings')}</div>`; $$('.profile-tabs button').forEach(b=>b.onclick=()=>{$$('.profile-tabs button').forEach(x=>x.classList.toggle('active',x===b));$('#profile-content').innerHTML=profileView(d,b.dataset.view)}); $('#drawer-follow').onclick=async()=>{await api(d.following?'/api/follow/remove':'/api/follow/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:d.address,chain:d.chain})});$('#drawer-follow').textContent=d.following?'Following':'Following';}; }
+function profileView(d,view){ if(view==='holdings'){if(d.status?.balances!=='ok')return sectionNotice(d.status?.balances,'Holdings');return `<div class="profile-list">${(d.holdings||[]).slice(0,20).map(h=>`<div class="profile-row">${avatar(h.image,h.symbol||'?')}<span><b>${esc(h.symbol||h.name||'?')}</b><small>${esc(h.network||'')}</small></span><strong>${usd(h.value_usd)}</strong><em>${pct((h.change_24h||0))}</em></div>`).join('')||'<div class="empty-note">No holdings returned.</div>'}</div>`;} if(view==='performance'){if(d.status?.pnl!=='ok')return sectionNotice(d.status?.pnl,'P&amp;L');return `<div class="profile-list">${(d.performance||[]).slice(0,20).map(h=>`<div class="profile-row"><span><b>${esc(h.symbol||h.name||'?')}</b><small>${h.buys||0} buys · ${h.sells||0} sells</small></span><strong class="${(h.total_pnl_usd||0)>=0?'up':'down'}">${usd(h.total_pnl_usd,true)}</strong><em>${h.roi==null?'—':pct(h.roi*100)}</em></div>`).join('')}</div>`;} if(view==='trades'){if(d.status?.trades!=='ok')return sectionNotice(d.status?.trades,'Trades');return `<div class="profile-list">${(d.trades||[]).slice(0,30).map(t=>`<div class="profile-row"><span><b class="${t.kind==='buy'?'up':'down'}">${esc(t.kind||'trade')}</b><small>${esc(t.dex||t.network||'')}</small></span><strong>${usd(t.usd)}</strong><em>${t.ts?new Date(t.ts).toLocaleDateString():''}</em></div>`).join('')||'<div class="empty-note">No recent trades.</div>'}</div>`;} if(view==='transfers'){if(d.status?.transfers!=='ok')return sectionNotice(d.status?.transfers,'Transfers');return `<div class="profile-list">${(d.transfers||[]).slice(0,30).map(t=>`<div class="profile-row"><span><b>${esc(t.direction||'transfer')}</b><small>${esc(t.symbol||'token')}</small></span><strong>${esc(String(t.amount??'—'))}</strong><em>${t.ts?new Date(t.ts).toLocaleDateString():''}</em></div>`).join('')||'<div class="empty-note">No transfers returned.</div>'}</div>`;} return `<div class="profile-list">${(d.by_chain||[]).map(c=>`<div class="profile-row"><span><b>${esc(c.network||c.chain||'network')}</b><small>${c.status||'ok'}</small></span><strong>${usd(c.total_pnl_usd??c.value_usd,true)}</strong></div>`).join('')||'<div class="empty-note">No per-chain rollup returned.</div>'}</div>`; }
+function closeDrawer(){$('#drawer-backdrop').classList.remove('open');}
+async function autoPick(){const r=await api('/api/follow/autopick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({k:5})}); (r.list||[]).forEach(x=>state.selected.add(x.address));renderWallets();tab('follow');}
+async function startFollow(){const addresses=[...state.selected]; const r=await api('/api/follow/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chain:$('#scan-chain').value,addresses,budget:+$('#follow-budget').value,poll_s:+$('#follow-poll-s').value})}); if(r.locked){$('#follow-status-panel').innerHTML=lockedCard(r);return;} $('#follow-start').disabled=true;$('#follow-stop').disabled=false;pollFollow();state.followTimer=setInterval(pollFollow,4000);}
+async function stopFollow(){await api('/api/follow/stop',{method:'POST'});$('#follow-start').disabled=false;$('#follow-stop').disabled=true;if(state.followTimer)clearInterval(state.followTimer);}
+async function pollFollow(){const d=await api('/api/follow/status'); if(!d.following){return;} const m=d.metrics||{}; $('#follow-summary').innerHTML=[['P&L',usd(m.pnl_usd,true),m.pnl_usd>=0?'up':'down'],['Return',pct(m.pnl_pct),m.pnl_pct>=0?'up':'down'],['Trades',m.trades??0,''],['Win rate',m.win_rate==null?'—':`${Math.round(m.win_rate*100)}%`,'']].map(x=>`<div class="metric"><small>${x[0]}</small><b class="${x[2]}">${x[1]}</b></div>`).join(''); $('#follow-status-panel').innerHTML=`<div class="card-title">Live paper-follow feed <span class="live-label">● running</span></div><div class="feed">${(d.recent_decisions||[]).slice(-12).reverse().map(x=>`<div><b class="${x.action==='buy'?'up':'down'}">${esc(x.action||'signal')}</b><span>${esc(x.token||x.reason||'')}</span><small>${x.ts?new Date(x.ts*1000).toLocaleTimeString():''}</small></div>`).join('')||'<div class="empty-note">Waiting for the first decision.</div>'}</div><p class="notice">${esc(d.latency_note||'Polling market data for paper decisions.')}</p>`; }
+function renderAssumptions(a){$('#assumptions-body').innerHTML=`<div class="assumption-grid">${Object.entries(a).filter(([k])=>k!=='latency_note').map(([k,v])=>`<div><small>${esc(k.replaceAll('_',' '))}</small><b>${esc(v)}</b></div>`).join('')}</div><p class="notice">${esc(a.latency_note||'Edit assumptions.yaml to change paper-fill assumptions.')}</p>`;}
+async function loadRuns(){const rows=await api('/api/runs');$('#runs-list').innerHTML=rows.length?rows.map(r=>`<article class="run-card"><div class="run-top"><span class="badge neutral">${esc(r.mode||'run')}</span><span>${esc(r.id||r.run_name||'')}</span></div><h3>${esc(r.title||'Paper run')}</h3><div class="run-metrics"><div><small>P&amp;L</small><b class="${(r.metrics?.pnl_usd||0)>=0?'up':'down'}">${usd(r.metrics?.pnl_usd??r.metrics?.pnl,true)}</b></div><div><small>RETURN</small><b>${pct(r.metrics?.pnl_pct)}</b></div><div><small>TRADES</small><b>${r.metrics?.trades??'—'}</b></div></div><div class="run-actions"><button class="ghost report-btn" data-id="${esc(r.id||r.run_name)}">Open report ↗</button><button class="ghost kit-btn" data-id="${esc(r.id||r.run_name)}">Article kit</button></div></article>`).join(''):'<div class="empty-note">No runs yet. Start a paper follow or run a backtest.</div>'; $$('.report-btn').forEach(b=>b.onclick=async()=>{const r=await api(`/api/runs/${b.dataset.id}/report`,{method:'POST'});window.open(r.url||r.html||`/runs/${b.dataset.id}/files/report.html`,'_blank','noopener')}); $$('.kit-btn').forEach(b=>b.onclick=async()=>{const r=await api(`/api/runs/${b.dataset.id}/article-kit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:'yourhandle'})});window.open(r.url||`/kit?run=${b.dataset.id}`,'_blank','noopener')});}
+async function openToken(token){if(!token)return;window.open(`/xray?token=${encodeURIComponent(token)}&chain=${encodeURIComponent($('#scan-chain').value)}`,'_blank','noopener');}
+async function showXrayPage(){ const q=new URLSearchParams(location.search), token=q.get('token'), chain=q.get('chain')||'solana'; tab('scan'); $('#scan-results').innerHTML='<div class="card loading"><span class="spinner"></span> Building token X-ray…</div>'; const x=await api(`/api/xray/token?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`); $('#scan-results').innerHTML=`<div class="card xray-page"><div class="eyebrow">TOKEN X-RAY · ${esc(x.chain_label||chain)}</div><h2>${esc(x.name||x.symbol||'Token')} <span class="muted">${esc(x.symbol||'')}</span></h2><p class="notice">${esc(x.address||token)}</p><div class="metric-grid">${[['Price',usd(x.price_usd)],['Market cap',compact(x.market_cap_usd)],['Liquidity',compact(x.liquidity_usd)],['GT score',x.gt_score??'—']].map(a=>`<div class="metric"><small>${a[0]}</small><b>${a[1]}</b></div>`).join('')}</div><div class="profile-list">${[['Honeypot',x.is_honeypot==null?'Unknown':x.is_honeypot?'Risk':'Clear'],['Mint authority',x.mint_authority??'Unknown'],['Freeze authority',x.freeze_authority??'Unknown'],['Developer holding',x.developer_holding_pct==null?'—':`${x.developer_holding_pct}%`],['Holders',x.holders_count??'—'],['Launchpad',x.launchpad?.name||x.launchpad||'—']].map(a=>`<div class="profile-row"><span><b>${a[0]}</b></span><strong>${esc(a[1])}</strong></div>`).join('')}</div></div>`; }
+boot();

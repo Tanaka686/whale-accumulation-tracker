@@ -13,7 +13,7 @@ from core.client import CoinGeckoClient, CoinGeckoError
 
 CACHE_PATH = Path("data/chains.json")
 CACHE_TTL_S = 24 * 3600
-MAX_PAGES = 10
+MAX_PAGES = 50
 
 _mem: dict = {"ts": 0.0, "chains": None}
 
