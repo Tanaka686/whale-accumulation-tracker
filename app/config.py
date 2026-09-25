@@ -1,14 +1,14 @@
 """Radar-specific settings, layered on top of core.config."""
 from core import config as core_config
 
-# Chains the Scan tab offers. Trim this list or add a chain your agent supports (see AGENTS.md).
-WALLET_CHAINS = ["solana", "base", "eth", "bsc", "polygon_pos", "arbitrum", "optimism", "avax"]
+# The chain the app opens on. The picker lists every network from GET /onchain/networks (app/chains.py).
+DEFAULT_CHAIN = "solana"
 
 SOURCES = {
     "trending_1h": "Trending (1h)",
     "trending_24h": "Trending (24h)",
     "new_pools": "New pools",
-    "safe_movers": "Safe movers (megafilter)",
+    "safe_movers": "Safe movers",
 }
 
 DEFAULT_TOP_N_TOKENS = 10

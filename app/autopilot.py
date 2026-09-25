@@ -36,8 +36,12 @@ async def run(
     max_credits_per_day: float = config.DEFAULT_MAX_CREDITS_PER_DAY,
     store_path: str = "state.db",
     max_seconds: float | None = None,
+    live: dict | None = None,
 ):
-    """Runs forever, or for max_seconds when set, with periodic rescan/poll/recap jobs."""
+    """Runs forever, or for max_seconds when set, with periodic rescan/poll/recap jobs.
+
+    `live`, if given, is filled with {"run_dir", "engine", "client"} so a UI can show progress.
+    """
     from .follow import FollowEngine  # local import: avoids a cycle with app.server at module load time
 
     client = CoinGeckoClient()
@@ -47,6 +51,8 @@ async def run(
     assumptions = load_assumptions()
     engine = FollowEngine(client, chain, store.get("followed", []), budget_usd, assumptions, poll_s)
     engine.addresses = store.get("followed", [])
+    if live is not None:
+        live.update(run_dir=run_dir, engine=engine, client=client, chain=chain, started_ts=time.time())
 
     async def do_rescan():
         picked = await rescan_and_select(client, chain, source, budget_usd, top_k)

@@ -36,30 +36,9 @@ async def cmd_backtest(args):
             scanned = await scan.scan(client, args.chain, args.source, n_tokens=config.DEFAULT_TOP_N_TOKENS)
             addresses = [c["address"] for c in scanned["candidates"] if not c["likely_bot"]][: args.max_wallets]
         print(f"[backtest] fetching trade history for {len(addresses)} wallet(s) on {args.chain}...")
-        rows_by_wallet = {}
-        for address in addresses:
-            rows_by_wallet[address] = await client.wallet_trades(args.chain, address, max_pages=args.max_pages)
-        assumptions = load_assumptions()
-        result = backtest_mod.run(rows_by_wallet, args.budget, assumptions)
-        run_dir = runs.new_run_dir("backtest")
-        blind = result["scenarios"]["blind"]["metrics"]
-        matched = result["scenarios"]["size_matched"]["metrics"]
-        runs.write_metrics(
-            run_dir,
-            {
-                "mode": "backtest",
-                "chain": args.chain,
-                "budget_usd": args.budget,
-                "candidate_wallets": result["candidate_wallets"],
-                "selected_wallets": result["selected_wallets"],
-                "covered_window": result["covered_window"],
-                "blind": blind,
-                "size_matched": matched,
-                "credits_used": client.credits_used,
-            },
-        )
-        runs.write_equity(run_dir, result["scenarios"]["blind"]["equity_curve"])
-        runs.write_trades_csv(run_dir, result["scenarios"]["blind"]["closed_trades"])
+        run_dir, m = await backtest_mod.run_live(client, args.chain, addresses, args.budget, load_assumptions(), max_pages=args.max_pages)
+        blind, matched = m["blind"], m["size_matched"]
+        result = {"candidate_wallets": m["candidate_wallets"], "selected_wallets": m["selected_wallets"]}
         print(f"[backtest] {result['candidate_wallets']} candidate wallet(s), {len(result['selected_wallets'])} selected")
         print(f"[backtest] blind full-size:  pnl={blind['pnl_pct']}%  trades={blind['trades']}  win_rate={blind['win_rate']}")
         print(f"[backtest] size-matched:     pnl={matched['pnl_pct']}%  trades={matched['trades']}  win_rate={matched['win_rate']}")
