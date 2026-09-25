@@ -29,7 +29,8 @@ async def token_context(client: CoinGeckoClient, chain: str, token: str, pool: s
     doc = await client.token(chain, token)
     a = doc["attributes"]
     pools = doc["pools"]
-    chosen = next((p for p in pools if (p.get("attributes") or {}).get("address", "").lower() == (pool or "").lower()), pools[0] if pools else None)
+    by_liquidity = sorted(pools, key=lambda p: w._f((p.get("attributes") or {}).get("reserve_in_usd"), 0.0) or 0.0, reverse=True)
+    chosen = next((p for p in pools if (p.get("attributes") or {}).get("address", "").lower() == (pool or "").lower()), by_liquidity[0] if by_liquidity else None)
     pa = (chosen or {}).get("attributes") or {}
     try:
         info = await client.token_info(chain, token)
@@ -43,6 +44,14 @@ async def token_context(client: CoinGeckoClient, chain: str, token: str, pool: s
         try:
             candles = await client.pool_ohlcv(chain, pool_addr, "hour", aggregate=1, limit=48)
             price_history = [{"ts": row[0], "close": row[4]} for row in reversed(candles) if len(row) >= 5]
+            if len(price_history) < 5:
+                # A thinly-traded pool can have almost no swaps in the last 48 hours even though
+                # the token itself has a long history — widen to daily candles over ~6 months
+                # rather than showing an empty chart for an established token.
+                daily = await client.pool_ohlcv(chain, pool_addr, "day", aggregate=1, limit=180)
+                daily_history = [{"ts": row[0], "close": row[4]} for row in reversed(daily) if len(row) >= 5]
+                if len(daily_history) > len(price_history):
+                    price_history = daily_history
         except CoinGeckoError:
             price_history = []
     return {

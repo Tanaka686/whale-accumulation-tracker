@@ -492,13 +492,26 @@ def api_follow_remove(body: dict):
     return items
 
 
+RECENT_ACTIVITY_DAYS = 3
+
+
+def _is_recent(p: dict) -> bool:
+    days = p.get("days_since_last_trade")
+    return days is not None and days <= RECENT_ACTIVITY_DAYS
+
+
 @app.post("/api/follow/autopick")
 def api_follow_autopick(body: dict | None = None):
     body = body or {}
     k = int(body.get("k", config.DEFAULT_TOP_K_FOLLOW))
     all_profiled = list(state["last_profiles"].values())
     profiles = [p for p in all_profiled if p.get("copyable")]
-    profiles.sort(key=lambda p: (p.get("skill_score") or 0, p.get("copyability") or 0), reverse=True)
+    # Auto-pick exists to get you watching live decisions quickly, so it prefers wallets that have
+    # actually traded in the last few days over ones that were only historically good — a wallet
+    # with no recent activity may never produce a single decision during your run. This is a
+    # preference (sort order), not a hard filter: if nothing recent qualifies, the best of what's
+    # available still gets picked, just with an honest note about it.
+    profiles.sort(key=lambda p: (_is_recent(p), p.get("skill_score") or 0, p.get("copyability") or 0), reverse=True)
     if not profiles:
         if not all_profiled:
             message = "Profile some wallets on the Radar first."
@@ -515,20 +528,26 @@ def api_follow_autopick(body: dict | None = None):
                 reasons.append(f"{not_copyable} not copyable at this budget")
             message = f"{len(all_profiled)} wallet(s) profiled, but none qualify ({', '.join(reasons)}). Try a different token/source, or raise your budget."
         return {"picked": [], "list": follow_list(), "message": message}
+    top = profiles[:k]
+    stale_in_pick = sum(1 for p in top if not _is_recent(p))
     items = {f["address"].lower(): f for f in follow_list()}
     picked = []
-    for p in profiles[:k]:
+    for p in top:
         items[p["address"].lower()] = {
             "address": p["address"],
             "chain": p["chain"],
             "label": p.get("label"),
             "skill_score": p.get("skill_score"),
             "copyability": p.get("copyability"),
+            "days_since_last_trade": p.get("days_since_last_trade"),
             "added_ts": time.time(),
         }
         picked.append(p["address"])
     _save_follow_list(list(items.values()))
-    return {"picked": picked, "list": list(items.values())}
+    message = None
+    if stale_in_pick:
+        message = f"Picked {len(top)}, but {stale_in_pick} haven't traded in the last {RECENT_ACTIVITY_DAYS} days and may sit quiet for a while — not enough recently-active copyable wallets were profiled to fill {k} slots."
+    return {"picked": picked, "list": list(items.values()), "message": message}
 
 
 def _assumptions_overrides(body: dict) -> dict:
@@ -618,6 +637,40 @@ async def api_follow_stop_all():
             entry["task"] = None
             stopped.append(run_id)
     return {"stopped": stopped}
+
+
+async def _stop_run(entry: dict):
+    task = entry.get("task")
+    if task:
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+        entry["task"] = None
+
+
+@app.post("/api/follow/delete")
+async def api_follow_delete(body: dict):
+    run_id = (body or {}).get("run_id")
+    if not run_id:
+        raise HTTPException(400, "run_id is required")
+    entry = state["follow_runs"].get(run_id)
+    if not entry:
+        raise HTTPException(404, "no such run")
+    await _stop_run(entry)
+    del state["follow_runs"][run_id]
+    return {"deleted": True, "run_id": run_id}
+
+
+@app.post("/api/follow/clear_stopped")
+async def api_follow_clear_stopped():
+    removed = []
+    for run_id, entry in list(state["follow_runs"].items()):
+        if not (entry.get("task") and not entry["task"].done()):
+            del state["follow_runs"][run_id]
+            removed.append(run_id)
+    return {"removed": removed}
 
 
 def _run_summary(run_id: str, entry: dict) -> dict:

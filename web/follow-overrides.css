@@ -41,3 +41,11 @@
 .fact-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
 .fact-row span{color:var(--text-muted)}
 .fact-row strong{font-weight:700}
+
+/* --- recency signal, heuristic-disclosure tooltip, and follow-run add/delete controls --- */
+.stale{color:#e0b04d}
+.info-tip{cursor:help;color:var(--text-muted);font-size:11px;border-bottom:1px dotted var(--text-muted);white-space:nowrap}
+.info-tip:hover{color:var(--text)}
+#follow-config-card{margin-bottom:16px}
+.run-delete-btn{color:#ff8a82;border-color:rgba(255,110,103,.35)}
+.run-delete-btn:hover{border-color:#ff6e67}
