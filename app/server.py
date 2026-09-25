@@ -32,7 +32,7 @@ from core.report import build as build_report
 from core.store import Store
 
 from . import backtest as backtest_mod
-from . import chains, config, profile, runs, scan, xray
+from . import chains, config, profile, runs, scan, tokens, xray
 from .follow import FollowEngine
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -76,9 +76,11 @@ app.mount("/brand", StaticFiles(directory=str(ROOT / "core" / "brand")), name="b
 
 @app.middleware("http")
 async def no_cache_pages(request: Request, call_next):
+    started = time.perf_counter()
     resp = await call_next(request)
     if not request.url.path.startswith("/api/"):
         resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    log.info("feature=http path=%s method=%s status=%s duration_ms=%s rest_credits=%s", request.url.path, request.method, resp.status_code, round((time.perf_counter() - started) * 1000), app.state.client.credits_used)
     return resp
 
 
@@ -597,10 +599,16 @@ def _report_details(run_dir: Path) -> dict:
                 decisions.append(json.loads(line))
             except json.JSONDecodeError:
                 continue
-    tokens: dict[str, dict] = {}
+    token_rows: dict[str, dict] = {}
+    run_metrics = runs.read_metrics(run_dir)
+    run_chain = run_metrics.get("chain", "")
     for d in decisions:
-        key = str(d.get("symbol") or d.get("token") or "unknown")
-        row = tokens.setdefault(key, {"symbol": d.get("symbol"), "token": d.get("token"), "chain": d.get("chain"), "buys": 0, "sells": 0, "paper_usd": 0.0, "pnl_usd": 0.0})
+        token = d.get("token") or d.get("symbol") or "unknown"
+        chain = d.get("chain") or run_chain
+        key = f"{chain}:{token}".lower()
+        row = token_rows.setdefault(key, {"symbol": d.get("symbol") if d.get("symbol") and d.get("symbol") != token else None, "token": token, "chain": chain, "buys": 0, "sells": 0, "paper_usd": 0.0, "pnl_usd": 0.0})
+        if d.get("image"):
+            row["image"] = d["image"]
         action = str(d.get("action") or d.get("side") or "").lower()
         if action == "buy": row["buys"] += 1
         if action == "sell": row["sells"] += 1
@@ -609,15 +617,32 @@ def _report_details(run_dir: Path) -> dict:
     if trades.exists():
         with trades.open(newline="") as fh:
             for r in csv.DictReader(fh):
-                key = r.get("symbol") or "unknown"
-                row = tokens.setdefault(key, {"symbol": key, "chain": "", "buys": 0, "sells": 0, "paper_usd": 0.0, "pnl_usd": 0.0})
+                token = r.get("symbol") or "unknown"
+                key = f"{run_chain}:{token}".lower()
+                row = token_rows.setdefault(key, {"symbol": None, "token": token, "chain": run_chain, "buys": 0, "sells": 0, "paper_usd": 0.0, "pnl_usd": 0.0})
                 try: row["pnl_usd"] += float(r.get("pnl_usd") or 0)
                 except (TypeError, ValueError): pass
     decisions_out = []
     for d in reversed(decisions[-30:]):
         ts = d.get("ts")
         decisions_out.append({**d, "time": time.strftime("%H:%M:%S", time.localtime(ts)) if isinstance(ts, (int, float)) else ts})
-    return {"token_rows": sorted(tokens.values(), key=lambda r: -(abs(r.get("paper_usd") or 0) + abs(r.get("pnl_usd") or 0))), "decision_rows": decisions_out}
+    active_rows = [r for r in token_rows.values() if r.get("buys") or r.get("sells") or r.get("paper_usd") or r.get("pnl_usd")]
+    ranked_rows = sorted(active_rows, key=lambda r: -(abs(r.get("paper_usd") or 0) + abs(r.get("pnl_usd") or 0)))[:50]
+    return {"token_rows": ranked_rows, "decision_rows": decisions_out}
+
+
+async def _enrich_report_details(details: dict, client: CoinGeckoClient) -> dict:
+    """Resolve the token logos/symbols used by an older run before rendering its report."""
+    pairs = {(r.get("chain"), r.get("token")) for r in details.get("token_rows", []) if r.get("chain") and r.get("token")}
+    if not pairs:
+        return details
+    metadata = await tokens.resolve(client, pairs)
+    for row in details.get("token_rows", []):
+        meta = metadata.get(f"{row.get('chain')}:{str(row.get('token') or '').lower()}") or {}
+        row["symbol"] = row.get("symbol") or meta.get("symbol")
+        row["name"] = meta.get("name")
+        row["image"] = row.get("image") or meta.get("image")
+    return details
 
 
 def _build_kit(run_dir: Path, handle: str, screenshot_urls: list[str] | None) -> dict:
@@ -637,9 +662,23 @@ def _build_kit(run_dir: Path, handle: str, screenshot_urls: list[str] | None) ->
 
 
 @app.post("/api/runs/{run_id}/report")
-def api_run_report(run_id: str):
+async def api_run_report(run_id: str, request: Request):
     run_dir = _run_dir(run_id)
-    paths = _build_report(run_dir)
+    details = await _enrich_report_details(_report_details(run_dir), request.app.state.client)
+    metrics = runs.read_metrics(run_dir)
+    if not metrics:
+        raise HTTPException(404, "no metrics for this run")
+    scenario_metrics = metrics.get("blind") or metrics.get("metrics") or metrics
+    paths = await run_in_threadpool(
+        lambda: build_report(
+            run_dir.name,
+            scenario_metrics,
+            runs.read_equity(run_dir),
+            credits_used=metrics.get("credits_used", 0),
+            out_dir=run_dir.parent,
+            details=details,
+        )
+    )
     return {**paths, "url": f"/runs/{run_dir.name}/files/report.html"}
 
 
