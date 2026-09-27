@@ -25,6 +25,28 @@ locked card instead of hanging when a feature isn't on your plan.
 - A CoinGecko API key ([get one](https://www.coingecko.com/en/api?utm_source=github&utm_content=smart-money-radar))
 - An AI coding agent (Claude Code or Codex) if you want to reskin or extend this
 
+## Important data and chain notes
+
+### CoinGecko data vs. repo-derived outputs
+
+CoinGecko API supplies the underlying market, token, pool, trade and wallet data used by this
+project. Wallet labels, skill and copyability scores, bot-like classifications, shortlists,
+signals, paper-trading decisions and reports are computed by this repository. They are editable
+examples, not CoinGecko API fields, official CoinGecko classifications, financial advice or
+validated trading signals. Inspect the supporting data and adapt the formulas before relying on
+them in your own workflow.
+
+### Recommended chains for end-to-end testing
+
+For demos that combine discovery with the complete wallet workflow, start with **Ethereum, Base,
+BNB Chain, Robinhood Chain or Arc Chain**. Solana still offers useful market, token, pool and trade
+data together with wallet P&L and wallet-trade history, while its wallet balance and transfer
+coverage is currently more limited. Use one of the recommended chains when your build depends on
+those additional wallet views.
+
+This note is implementation context for you and your coding agent; chain-coverage gaps do not need
+to become the topic of creator-facing content.
+
 ## Quickstart
 
 ```
@@ -40,7 +62,7 @@ Paste any of these into Claude Code or Codex, from inside this repo:
 1. "Change the Scan tab's default source from trending_1h to new_pools, and change the default budget to $250."
 2. "Restyle this to a purple/black theme. Keep the CoinGecko badge and the links block intact."
 3. "Add a filter to the Wallets tab for wallets seen in 3+ tokens this scan."
-4. "Add Base and Arbitrum to the chain picker (see `app/config.py` and `core/config.py` `WALLET_CHAIN_CAPS`)."
+4. "Make Base the default chain and explain how `WALLET_CHAIN_CAPS` handles endpoint differences."
 5. "Change the copyability formula in `app/scoring.py` to weight trade frequency more heavily."
 6. "Add a Telegram or Discord webhook that posts every autopilot decision."
 
@@ -65,7 +87,7 @@ wallet pnl/trades                                     app/backtest.py)
 ### The four modes
 
 ```
-make backtest SOURCE=trending_1h CHAIN=solana   # walk-forward: select on the first 60%, replay the last 40%
+make backtest SOURCE=trending_1h CHAIN=base     # walk-forward: select on the first 60%, replay the last 40%
 make forward MINUTES=3                          # live on paper, logs every decision
 make autopilot                                  # rescans + re-scores + trades on paper, forever
 make report RUN=latest                          # report.html + report-card.png for any run
