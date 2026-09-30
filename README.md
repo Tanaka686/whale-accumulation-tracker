@@ -3,112 +3,212 @@
   <img src="core/brand/coingecko-api-on-light.svg" alt="Data powered by CoinGecko API" height="32">
 </picture>
 
-# Smart Money Radar
+# Whale Accumulation Tracker
 
-Scan today's hottest tokens, find the wallets trading them, score every wallet on real PnL and
-copyability, then paper copy-trade the best ones -- on autopilot if you want. It's the CoinGecko
-API wallet endpoints doing what a screener can't: your own rules, running on real trade history,
-24/7.
+Paste a token contract and see whether its biggest holders are **buying, selling or just holding** over the last 7 or 30 days.
 
-![Demo](docs/demo.gif)
+The tracker reads a token's top holders, sets aside exchanges, contracts and pools, then follows what each remaining whale did with the token: DEX trades, exchange withdrawals, other transfers, and tokens moved in and out of locks and LPs. Every whale gets a stance (Accumulating, New position, Holding, Distributing) and a plain-English reason, and each scan is saved as a JSON file.
 
-## Get your API key
+![Whales tab: token header, summary cards and the 4-part flow breakdown](docs/screens/whales-summary.png)
 
-Grab a free key at [coingecko.com/en/api](https://www.coingecko.com/en/api?utm_source=github&utm_content=smart-money-radar). The
-Scan and Wallets tabs need an **Analyst** plan or higher (that's where `top_traders`, `top_holders`
-and the wallet endpoints live); trending/new pools work on the free Demo plan, and the app shows a
-locked card instead of hanging when a feature isn't on your plan.
+It runs on the [CoinGecko API](https://www.coingecko.com/en/api?utm_source=github&utm_content=tanaka_l2) onchain endpoints (top holders, wallet trades, wallet transfers) and started from CoinGecko's open-source Smart Money Radar starter, whose Radar, Wallets, Follow and Runs tabs are still included.
 
-## What you need
+## What you get
 
-- Python 3.12 and [`uv`](https://docs.astral.sh/uv/)
-- A CoinGecko API key ([get one](https://www.coingecko.com/en/api?utm_source=github&utm_content=smart-money-radar))
-- An AI coding agent (Claude Code or Codex) if you want to reskin or extend this
+- **Whales tab** (the default tab): network + token contract + 7d/30d + 20/50 holders, and a clear loading state while it scans.
+- **Summary cards:** how many whales are Accumulating, New position, Holding, Distributing, and the total whale net flow in USD.
+- **4-part flow breakdown:** DEX, Exchange, Other transfers, and Locked/LP shown separately.
+- **Diverging bar chart** of net flow per whale (green = in, red = out).
+- **Sortable whale table** with wallet links to the block explorer, labels and tags (for example `Multisig`), % of supply, holding value, each flow part, net flow, change vs the starting balance, stance and reason.
+- **Collapsible lists** of the wallets that were set aside (with their label and the reason) and of wallets with incomplete data.
+- **Warnings** when 24h volume is more than 50x liquidity, when wallets are incomplete, or when the credit cap is reached.
+- **A JSON file per scan** in `data/whales/`.
 
-## Important data and chain notes
+![Net flow per whale, in USD](docs/screens/whales-chart.png)
 
-### CoinGecko data vs. repo-derived outputs
-
-CoinGecko API supplies the underlying market, token, pool, trade and wallet data used by this
-project. Wallet labels, skill and copyability scores, bot-like classifications, shortlists,
-signals, paper-trading decisions and reports are computed by this repository. They are editable
-examples, not CoinGecko API fields, official CoinGecko classifications, financial advice or
-validated trading signals. Inspect the supporting data and adapt the formulas before relying on
-them in your own workflow.
-
-### Recommended chains for end-to-end testing
-
-For demos that combine discovery with the complete wallet workflow, start with **Ethereum, Base,
-BNB Chain, Robinhood Chain or Arc Chain**. Solana still offers useful market, token, pool and trade
-data together with wallet P&L and wallet-trade history, while its wallet balance and transfer
-coverage is currently more limited. Use one of the recommended chains when your build depends on
-those additional wallet views.
-
-This note is implementation context for you and your coding agent; chain-coverage gaps do not need
-to become the topic of creator-facing content.
-
-## Quickstart
-
-```
-make install
-cp env.example .env   # then paste your key into .env
-make run               # http://localhost:8000
-```
-
-## Make it yours with your AI agent
-
-Paste any of these into Claude Code or Codex, from inside this repo:
-
-1. "Change the Scan tab's default source from trending_1h to new_pools, and change the default budget to $250."
-2. "Restyle this to a purple/black theme. Keep the CoinGecko badge and the links block intact."
-3. "Add a filter to the Wallets tab for wallets seen in 3+ tokens this scan."
-4. "Make Base the default chain and explain how `WALLET_CHAIN_CAPS` handles endpoint differences."
-5. "Change the copyability formula in `app/scoring.py` to weight trade frequency more heavily."
-6. "Add a Telegram or Discord webhook that posts every autopilot decision."
-
-See `AGENTS.md` for the full repo map and customization recipes.
+![The whale table: each flow part, net flow, change, stance and reason](docs/screens/whales-table.png)
 
 ## How it works
 
 ```
-Discovery                Real-time-ish              Your logic              Execution
-trending/new pools   →   poll followed wallets   →   scoring + rules   →   paper trades
-top_traders/holders      every N seconds             (app/scoring.py,        (core/paper.py)
-wallet pnl/trades                                     app/backtest.py)
+token contract + network (eth | base | bsc) + window (7d | 30d) + holders (20 | 50)
+        |
+        v
+1. TOP HOLDERS        GET /onchain/networks/{network}/tokens/{address}/top_holders
+        |             + the token call for price, its pools, 24h volume and liquidity
+        v
+2. SORT THE HOLDERS   set aside: burn addresses, the token itself, its liquidity pools,
+        |                        labels that look like contracts or exchanges
+        |             keep as whales: everything else (multisigs get a "Multisig" tag,
+        |                        other labels are shown as they are)
+        v
+3. PER WHALE          GET .../wallets/{address}/trades     ?token=...&from=...&to=...
+        |             GET .../wallets/{address}/transfers  ?token=...&from=...&to=...
+        v
+4. DE-DUPLICATE       a swap shows up as a trade AND as a transfer with the same tx hash;
+        |             the trade is kept, so a swap is never counted twice
+        v
+5. SPLIT THE FLOW     DEX | Exchange | Other transfers | Locked/LP
+        |
+        v
+6. STANCE + REASON    judged on DEX + Exchange + Other only
+        |
+        v
+7. RESULT             Whales tab + data/whales/<time>-<network>-<token>.json
 ```
 
-| Layer | Endpoints used |
-|---|---|
-| Discovery | trending pools, new pools, megafilter, `top_traders`, `top_holders` |
-| Wallet profiling | `wallets/{address}/pnl`, `networks/{network}/wallets/{address}/trades`, `wallets/{address}/balances` |
-| Decision logic | your rules in `app/scoring.py` + `app/backtest.py` |
-| Execution | paper trading only (`core/paper.py`) |
+### The 4-part flow breakdown
 
-### The four modes
-
-```
-make backtest SOURCE=trending_1h CHAIN=base     # walk-forward: select on the first 60%, replay the last 40%
-make forward MINUTES=3                          # live on paper, logs every decision
-make autopilot                                  # rescans + re-scores + trades on paper, forever
-make report RUN=latest                          # report.html + report-card.png for any run
-make article-kit RUN=latest HANDLE=you           # article-kit/ ready for an X Article
-```
-
-## What you can do on each plan
-
-| Feature | Demo (free) | Analyst+ |
+| Part | What it counts | Counts toward net flow? |
 |---|---|---|
-| Trending / new pools | ✅ | ✅ |
-| Safe-movers megafilter | 🔒 [upgrade](https://www.coingecko.com/en/api/pricing?utm_source=github&utm_content=smart-money-radar) | ✅ |
-| `top_traders` / `top_holders` (Scan) | 🔒 [upgrade](https://www.coingecko.com/en/api/pricing?utm_source=github&utm_content=smart-money-radar) | ✅ |
-| Wallet PnL / trades / balances (Wallets, Follow) | 🔒 [upgrade](https://www.coingecko.com/en/api/pricing?utm_source=github&utm_content=smart-money-radar) | ✅ |
+| **DEX** | Trades: bought minus sold | Yes |
+| **Exchange** | Transfers to or from the exchange wallets that were set aside. A withdrawal from an exchange is positive, a deposit to one is negative | Yes |
+| **Other transfers** | Every other wallet-to-wallet transfer, in minus out | Yes |
+| **Locked / LP** | Transfers to or from the contracts and pools that were set aside (Voting Escrow, LPs, gauges, vaults). Locking or adding to an LP is negative, unlocking or removing is positive | **No.** Shown on its own; it is not a buy or a sell |
 
-Demo software. Paper trading only. CoinGecko API provides market data; it doesn't execute trades or
-give financial advice.
+**Net flow = DEX + Exchange + Other.** Amounts are computed in tokens first; USD uses the trade's own volume for trades and today's token price for plain transfers (the transfers endpoint has no USD field).
+
+### Stance rules
+
+The API has no historical balances, so the balance at the start of the window is estimated:
+
+```
+start balance = current balance - net flow - Locked/LP
+```
+
+| Stance | Rule |
+|---|---|
+| **New position** | start balance is below 1% of today's balance |
+| **Accumulating** | net flow is more than +2% of the start balance |
+| **Distributing** | net flow is less than -2% of the start balance |
+| **Holding** | anything in between |
+| **Incomplete data** | the wallet filled every page it was allowed to fetch (10 pages of 300 rows per call). Shown as "very active wallet (possible bot or market maker)", with no stance, and left out of the totals |
+| **Not scanned** | the scan's credit cap was reached before this wallet was started; left out of the totals |
+
+Two details that matter:
+
+- Locking tokens in Voting Escrow or adding them to an LP is **not** distributing, and unlocking is **not** accumulating. The stance only looks at DEX + Exchange + Other.
+- A wallet whose start balance is about zero only because its tokens came back from a pool or a lock (more than half of its inflow is Locked/LP) is called **Holding** ("mostly removed from a liquidity pool"), not New position.
+
+Each whale also gets a short reason such as `mostly DEX buying`, `mostly exchange withdrawal`, `mostly locked into Voting Escrow` or `mostly other transfers out`. It names the biggest of the four parts. All thresholds and keyword lists live in one clearly marked section of `app/config.py` (`WHALE ACCUMULATION TRACKER`).
+
+### Credits
+
+Each API request or page costs 1 credit. A scan uses 2 credits for the holders and token calls, plus at most 20 per whale (up to 10 pages of 300 rows for trades and 10 for transfers). A whole scan stops starting new wallets at **1,500 credits**. Requests that time out (408) or fail on the server (5xx) are retried up to 3 times.
+
+Measured on Base with 50 holders and a 7-day window: AERO used about 56-61 credits, and the busier NVDAc used about 193. Wallets that were set aside cost nothing.
+
+## Requirements
+
+- A CoinGecko API key on the **Analyst plan or higher**. The top holders and wallet endpoints are not on the free Demo plan, and the app shows a locked card instead of hanging when the plan is too low. Get a key: [coingecko.com/en/api](https://www.coingecko.com/en/api?utm_source=github&utm_content=tanaka_l2).
+- Networks: Ethereum (`eth`), Base (`base`) and BNB Chain (`bsc`).
+- Python 3.12 and [`uv`](https://docs.astral.sh/uv/). `uv` downloads Python 3.12 for you.
+
+## Setup
+
+### Windows (PowerShell)
+
+```powershell
+# 1. Install uv (no admin rights needed), then close and reopen PowerShell
+irm https://astral.sh/uv/install.ps1 | iex
+
+# 2. Get the code and install everything
+git clone https://github.com/Tanaka686/whale-accumulation-tracker
+cd whale-accumulation-tracker
+uv python install 3.12
+uv sync --extra dev
+
+# 3. Add your API key (paste it after COINGECKO_API_KEY=, then save)
+copy env.example .env
+notepad .env
+
+# 4. Start the app
+uv run uvicorn app.server:app --port 8000
+```
+
+Open <http://127.0.0.1:8000>. Press **Ctrl+C** in the PowerShell window to stop it.
+
+### Mac / Linux
+
+```bash
+# 1. Install uv, then open a new terminal
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. Get the code and install everything
+git clone https://github.com/Tanaka686/whale-accumulation-tracker
+cd whale-accumulation-tracker
+uv python install 3.12
+uv sync --extra dev
+
+# 3. Add your API key
+cp env.example .env
+$EDITOR .env
+
+# 4. Start the app (or: make run)
+uv run uvicorn app.server:app --port 8000
+```
+
+Open <http://127.0.0.1:8000> and press **Ctrl+C** to stop.
+
+### Your API key
+
+`.env` holds `COINGECKO_API_KEY=` and `COINGECKO_ENVIRONMENT=pro` (use `demo` only for a Demo key, which cannot run whale scans). `.env` is in `.gitignore`: never commit it. The key is read on the server only; it is not sent to the browser and it is not printed or logged.
+
+### Run the tests
+
+```
+uv run pytest -q
+```
+
+The tests run offline, use no credits and need no key.
+
+## Limitations
+
+Read these before you rely on a result:
+
+- **Only current top holders are listed.** A whale that sold everything during the window is no longer a holder, so it is missing. The tool is better at spotting accumulation than at spotting exits.
+- **Busy wallets may be incomplete.** A wallet with more trades or transfers than the page limit (about 3,000 rows per call) is marked "Incomplete data" and left out of the totals, so on very active tokens the totals are understated. These are often bots or market makers.
+- **The starting balance is estimated** as today's balance minus the flow (the API has no historical balances). Holder data is a snapshot that can lag by about a minute, and the window ends at the last full minute, so the estimate can be slightly off.
+- **Labels, stances, reasons and the flow breakdown are computed by this tool.** They are not CoinGecko fields or official CoinGecko classifications. Whether a wallet counts as an "exchange" or a "contract" comes from keywords matched against CoinGecko's address label, which are editable examples and can be wrong.
+- **Exchange and Locked/LP only recognise wallets that are in the holder list.** An exchange deposit address, or a gauge, that is not among the top holders shows up under "Other transfers".
+- **A transfer is not a trade.** Tokens received from an unlabelled wallet may be a purchase from a private seller, a payment, or one entity moving funds between its own wallets. The tool cannot tell.
+- **USD for plain transfers uses today's price**, not the price at the time of the transfer.
+- **Top holders data is in Beta** at CoinGecko and may change or have gaps.
+- **Volume vs liquidity is only a hint.** The warning at more than 50x flags tokens where bots or wash trading are likely, but it is a rule of thumb.
+- Not financial advice.
+
+## Data and outputs
+
+CoinGecko API supplies the underlying token, pool, holder, trade, transfer and price data. Wallet labels, stances, reasons, shortlists, flow breakdowns and reports are computed by this repository and are editable examples, not CoinGecko API fields, financial advice or validated trading signals. Inspect the supporting data and adapt the rules before relying on them.
+
+## The rest of the app
+
+The original Smart Money Radar tabs still work next to Whales:
+
+- **Radar:** trending or new tokens, and the wallets that recur across their top traders.
+- **Wallets:** profiles for those wallets (PnL, win rate, holdings, trades, transfers).
+- **Follow:** paper copy-trading of chosen wallets (paper only, no real orders).
+- **Runs:** reports and article kits for paper runs and backtests.
+
+Commands such as `make backtest`, `make forward` and `make autopilot` are described in `AGENTS.md`, which also has the repo map for AI coding agents.
+
+## Project layout for the Whales tab
+
+```
+app/accumulation.py     the whole method: filters, flow split, stances, scan(), JSON saving
+app/config.py           editable keyword lists, thresholds and caps (WHALE ACCUMULATION TRACKER section)
+app/server.py           POST /api/whales/scan, GET /api/whales/config
+core/client.py          CoinGecko client: top_holders, wallet_trades, wallet_transfers, retries
+web/whales.js|css       the Whales tab
+tests/                  test_accumulation*.py, test_whales_api.py, test_client_*.py
+data/whales/            one JSON file per scan (git-ignored)
+```
+
+Demo software. Analysis only: no trades are made, and CoinGecko API provides market data; it doesn't execute trades or give financial advice.
 
 <!-- coingecko-links:start -->
-- CoinGecko API: https://www.coingecko.com/en/api?utm_source=github&utm_content=smart-money-radar
-- Pricing: https://www.coingecko.com/en/api/pricing?utm_source=github&utm_content=smart-money-radar
-- Docs: https://docs.coingecko.com?utm_source=github&utm_content=smart-money-radar
-- Agent Skill + MCP: https://docs.coingecko.com/ai-integration?utm_source=github&utm_content=smart-money-radar
+- CoinGecko API: https://www.coingecko.com/en/api?utm_source=github&utm_content=tanaka_l2
+- Pricing: https://www.coingecko.com/en/api/pricing?utm_source=github&utm_content=tanaka_l2
+- Docs: https://docs.coingecko.com?utm_source=github&utm_content=tanaka_l2
+- Agent Skill + MCP: https://docs.coingecko.com/ai-integration?utm_source=github&utm_content=tanaka_l2
 <!-- coingecko-links:end -->

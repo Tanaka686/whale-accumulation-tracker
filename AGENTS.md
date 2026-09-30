@@ -10,6 +10,8 @@ core/           shared CoinGecko client, paper-trading engine, plan detection, r
                 builder. Don't rewrite this wholesale; it's shared logic ported from a larger kit.
 app/
   config.py     chains, sources, defaults, the safe-movers megafilter preset
+  accumulation.py  Whales tab: top_holders -> whales vs excluded -> per-whale trades + transfers -> 4-part flow
+                (DEX / Exchange / Other / Locked-LP) -> stance + reason; saves data/whales/*.json
   scan.py       Scan tab: pools -> tokens -> top_traders -> deduped wallet candidates
   scoring.py    skill_score() + profile_wallet(): the deterministic scoring formula
   profile.py    Wallets tab: live wallet_pnl + wallet_trades + wallet_balances calls
@@ -19,8 +21,10 @@ app/
   runs.py       runs/<id>/ directory layout (decisions.jsonl, trades.csv, metrics.json)
   cli.py        `python -m app.cli <backtest|forward|autopilot|report|article-kit|set-link|record|replay>`
   server.py     FastAPI app: serves web/ and the Scan/Wallets/Follow/Runs API
-web/            plain HTML/JS/CSS UI. No build step, no framework.
-tests/          offline pytest (no network): scan dedupe, scoring, backtest no-lookahead, plan-lock
+web/            plain HTML/JS/CSS UI. No build step, no framework. whales.js/whales.css are the Whales tab
+                (the first tab); app.js runs the other tabs.
+tests/          offline pytest (no network): scan dedupe, scoring, backtest no-lookahead, plan-lock,
+                whale flow/stances/credit cap, the /api/whales endpoints, client retries
 ```
 
 ## Run / test commands
@@ -45,6 +49,11 @@ make set-link HANDLE=you
   to swap the logo file by hand.
 - **Change the strategy / scoring**: `app/scoring.py` has one function, `skill_score()`, and one
   composite label rule in `core/wallets.label_wallet()`. Change the weights, or add a new label.
+- **Change the whale rules**: the keyword lists (contracts, exchanges, multisigs, burn addresses), the
+  +/-2% and 1% stance thresholds, the page limit, the per-wallet and per-scan credit caps and the
+  volume/liquidity warning all live in the `WHALE ACCUMULATION TRACKER` section of `app/config.py`.
+  The logic is in `app/accumulation.py` (`classify_holder`, `compute_flow`, `stance_for`, `scan`).
+  Locked/LP must never drive a stance; keep it out of `net_tokens` / `net_usd`.
 - **Add a filter to Scan**: `app/scan.py` builds the megafilter params in `app/config.py`
   (`SAFE_MOVERS_FILTERS`). Add keys there; see the onchain pools megafilter docs for the full list.
 - **Add a chain**: add it to `WALLET_CHAINS` in `app/config.py` and to `CHAINS` /
