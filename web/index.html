@@ -3,13 +3,32 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Smart Money Radar · CoinGecko API</title>
-<link rel="stylesheet" href="/core-web/theme.css"><link rel="stylesheet" href="/static/styles.css"><link rel="stylesheet" href="/static/follow-overrides.css">
+<link rel="stylesheet" href="/core-web/theme.css"><link rel="stylesheet" href="/static/styles.css"><link rel="stylesheet" href="/static/follow-overrides.css"><link rel="stylesheet" href="/static/whales.css">
 </head>
 <body><div class="app-shell">
 <header class="hero"><div class="brand"><div id="cg-badge"></div><div><div class="eyebrow">ON-CHAIN DISCOVERY LAB</div><h1>Smart Money Radar</h1><p>Find the wallets behind the move, understand their edge, and paper-follow the signal.</p></div></div><div class="hero-stats"><div><b id="hero-chain-count">—</b><span>networks indexed</span></div><div><b>4</b><span>evidence lanes</span></div></div></header>
-<nav class="tabs"><button class="active" data-tab="scan">Radar</button><button data-tab="wallets">Wallets <i id="wallet-count">0</i></button><button data-tab="follow">Follow</button><button data-tab="runs">Runs</button></nav>
+<nav class="tabs"><button class="active" data-tab="whales">Whales</button><button data-tab="scan">Radar</button><button data-tab="wallets">Wallets <i id="wallet-count">0</i></button><button data-tab="follow">Follow</button><button data-tab="runs">Runs</button></nav>
 
-<section id="panel-scan" class="panel active">
+<section id="panel-whales" class="panel active">
+  <div id="w-locked"></div>
+  <div class="control-card">
+    <div class="control-title"><div><div class="eyebrow">WHALE ACCUMULATION TRACKER</div><h2>Are the biggest holders buying or selling?</h2><p>Paste a token contract. We read its top holders, set aside exchanges and contracts, and track what each whale did over the last 7 or 30 days.</p></div></div>
+    <form class="w-form" id="w-form" autocomplete="off">
+      <label class="field">Network<select id="w-network"></select></label>
+      <label class="field">Token contract address<input id="w-token" placeholder="0x…" spellcheck="false" autocomplete="off"></label>
+      <div class="field">Window<div class="w-seg" id="w-days"></div></div>
+      <div class="field">Holders<div class="w-seg" id="w-holders"></div></div>
+      <button class="primary big w-run" id="w-run" type="submit">Scan whales</button>
+    </form>
+    <div class="w-formerr" id="w-formerr" role="alert"></div>
+    <div class="w-hint"><span>Try an example:</span><button type="button" class="chip" data-network="base" data-token="0x940181a94a35a4569e4529a3cdfb74e38fd98631">AERO · Base</button><span id="w-cost"></span></div>
+  </div>
+  <div id="w-status"></div>
+  <div id="w-results"></div>
+  <p class="w-footnote">Holders, trades, transfers and prices come from CoinGecko API. Stance labels, reasons and the flow breakdown are computed by this tool, not CoinGecko fields, and are not financial advice.</p>
+</section>
+
+<section id="panel-scan" class="panel">
   <div id="scan-locked"></div>
   <div class="control-card"><div class="control-title"><div><div class="eyebrow">01 · DISCOVER</div><h2>Scan the market pulse</h2><p>Use a chain-wide shortlist, then surface the wallets recurring across the tokens.</p></div><button class="primary big" id="scan-run">Run radar <span>↗</span></button></div><div class="radar-search"><span>⌕</span><input id="radar-search" placeholder="Search any token, pool, ticker, contract, or wallet…" autocomplete="off"><button class="ghost" id="radar-search-btn">Search</button></div><div id="radar-search-results" class="radar-search-results"></div>
     <div id="token-queue" class="token-queue"></div>
@@ -31,4 +50,4 @@
 <section id="panel-runs" class="panel"><div class="section-head"><div><div class="eyebrow">04 · PUBLISHABLE EVIDENCE</div><h2>Runs &amp; reports</h2><p>Open a self-contained report in a new tab, or generate an article kit for a creator post.</p></div></div><div id="runs-list" class="run-grid"></div></section>
 <footer id="cg-footer"></footer></div>
 <div id="drawer-backdrop" class="drawer-backdrop"><aside class="drawer"><button class="close" id="drawer-close">×</button><div id="drawer-body"></div></aside></div>
-<script src="/core-web/brand.js"></script><script src="/static/app.js"></script></body></html>
+<script src="/core-web/brand.js"></script><script src="/static/app.js"></script><script src="/static/whales.js"></script></body></html>

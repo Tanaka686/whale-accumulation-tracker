@@ -47,6 +47,8 @@ WHALE_MAX_PAGES = 10  # trade/transfer pages (300 rows each, so ~3,000 rows) fet
 WHALE_MAX_CREDITS_PER_WALLET = 20  # hard cap per whale (1 credit per page, trades + transfers together): pages per call = min(WHALE_MAX_PAGES, this / 2)
 # A wallet that fills every page it is allowed is "Incomplete data" ("very active wallet, possible bot or market maker")
 # and stays out of the totals.
+WHALE_MAX_CREDITS_PER_SCAN = 1500  # safety cap for a whole scan: past it no more wallets are started (they are listed as "Not scanned")
+WHALE_CONCURRENCY = 6  # wallets analysed at the same time
 WHALE_VOLUME_LIQUIDITY_WARN_RATIO = 50  # warn when the token's 24h volume is more than this many times its liquidity
 WHALE_LOCKED_INFLOW_MIN_SHARE = 0.5  # a "New position" whose inflow is at least this share Locked/LP (removed from a pool...) is "Holding"
 
@@ -69,6 +71,8 @@ WHALE_BURN_ADDRESSES = [
 # Stance rules (share of the wallet's balance at the start of the window):
 WHALE_NEW_POSITION_MAX_START_PCT = 1.0  # start balance below 1% of the current balance -> "New position"
 WHALE_STANCE_THRESHOLD_PCT = 2.0  # net flow above +2% of the start balance -> Accumulating, below -2% -> Distributing
+
+WHALE_EXPLORERS = {"eth": "https://etherscan.io", "base": "https://basescan.org", "bsc": "https://bscscan.com"}  # wallet links in the Whales tab
 
 WHALE_SCANS_DIR = "data/whales"  # one JSON file per scan (kept out of runs/ so the Runs tab is not confused)
 

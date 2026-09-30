@@ -17,7 +17,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from core import wallets as w
@@ -31,6 +31,7 @@ from core.recorder import replay as replay_fixture
 from core.report import build as build_report
 from core.store import Store
 
+from . import accumulation
 from . import backtest as backtest_mod
 from . import chains, config, profile, runs, scan, tokens, xray
 from .follow import FollowEngine
@@ -51,6 +52,7 @@ state: dict = {
     "last_profiles": {},
     "jobs": {},
     "autopilot": None,
+    "whale_scan_running": False,
 }
 
 
@@ -146,7 +148,7 @@ def recorder(demo: str, tag: str) -> Recorder:
 
 # ---------- pages ----------
 
-PAGES = {"/": "index.html", "/xray": "index.html", "/wallet": "index.html", "/follow": "index.html", "/runs": "index.html", "/kit": "index.html"}
+PAGES = {"/": "index.html", "/whales": "index.html", "/xray": "index.html", "/wallet": "index.html", "/follow": "index.html", "/runs": "index.html", "/kit": "index.html"}
 
 
 def _page(name: str):
@@ -155,6 +157,11 @@ def _page(name: str):
 
 for _path, _file in PAGES.items():
     app.add_api_route(_path, _page(_file), methods=["GET"], include_in_schema=False)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)  # no icon yet; this just keeps the browser console free of a 404
 
 
 # ---------- meta ----------
@@ -293,6 +300,62 @@ async def api_trending(chain: str = config.DEFAULT_CHAIN, source: str = "trendin
         seen.add(key)
         rows.append(r)
     return {"rows": rows[:n]}
+
+
+# ---------- Whales ----------
+
+
+@app.get("/api/whales/config")
+def api_whales_config():
+    labels = config.core_config.CHAINS
+    return {
+        "networks": [{"id": n, "label": labels.get(n, n)} for n in config.WHALE_NETWORKS],
+        "days": list(config.WHALE_WINDOW_DAYS),
+        "holders": [20, 50],
+        "default_holders": config.WHALE_DEFAULT_HOLDERS,
+        "credit_cap": config.WHALE_MAX_CREDITS_PER_SCAN,
+        "credits_per_wallet": accumulation.pages_per_call() * 2,
+        "explorers": config.WHALE_EXPLORERS,
+        "thresholds": {"new_position_max_start_pct": config.WHALE_NEW_POSITION_MAX_START_PCT, "stance_pct": config.WHALE_STANCE_THRESHOLD_PCT},
+    }
+
+
+def _whale_error(e: CoinGeckoError) -> JSONResponse:
+    if e.status == 404:
+        msg = "CoinGecko has no holder data for this token on this network (HTTP 404). Check the contract address and the network."
+    elif e.status == 0:
+        msg = "Could not reach CoinGecko. Check your connection and try again."
+    else:
+        msg = f"CoinGecko returned an error (HTTP {e.status}). Try again in a moment."
+    return JSONResponse({"error": msg, "status": e.status}, status_code=404 if e.status == 404 else 502)
+
+
+@app.post("/api/whales/scan")
+async def api_whales_scan(body: dict):
+    """One whale accumulation scan: the token's top holders, who is buying, selling or locking. Saves a JSON file."""
+    if not caps().get("analyst"):
+        return locked("Whale scans use the top holders and wallet endpoints (Analyst plan or higher).", upgrade_url())
+    try:
+        days = int(body.get("days", config.WHALE_WINDOW_DAYS[0]))
+        holders = int(body.get("holders", config.WHALE_DEFAULT_HOLDERS))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "days and holders must be numbers")
+    if state["whale_scan_running"]:
+        raise HTTPException(409, "A whale scan is already running. Wait for it to finish.")
+    state["whale_scan_running"] = True
+    t0 = time.perf_counter()
+    try:
+        result = await accumulation.scan(app.state.client, str(body.get("network") or "").strip(), str(body.get("token") or "").strip(), days=days, holders=holders)
+    except accumulation.WhaleScanInputError as e:
+        raise HTTPException(400, str(e))
+    except PlanRestrictedError:
+        return locked("Whale scans need an Analyst plan or higher.", upgrade_url())
+    except CoinGeckoError as e:
+        return _whale_error(e)
+    finally:
+        state["whale_scan_running"] = False
+    result["elapsed_ms"] = round((time.perf_counter() - t0) * 1000)
+    return result
 
 
 # ---------- Radar ----------

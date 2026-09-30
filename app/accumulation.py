@@ -330,6 +330,26 @@ def _window(now: float, days: int) -> tuple[str, str]:
 
 INCOMPLETE = "Incomplete data"
 INCOMPLETE_REASON = "very active wallet (possible bot or market maker)"
+NOT_SCANNED = "Not scanned"
+
+
+def _not_scanned(holder: dict, verdict: dict) -> dict:
+    """A whale we did not fetch because the scan's credit cap was reached."""
+    return {
+        "rank": holder.get("rank"),
+        "address": holder.get("address"),
+        "short": _short(holder.get("address")),
+        "label": holder.get("label") or None,
+        "tags": verdict["tags"],
+        "supply_pct": _f(holder.get("percentage")),
+        "balance": _f(holder.get("amount"), 0.0) or 0.0,
+        "balance_usd": _f(holder.get("value")),
+        "error": None,
+        "stance": NOT_SCANNED,
+        "stance_reason": "credit cap reached before this wallet was scanned",
+        "breakdown": None,
+        "warnings": [],
+    }
 
 
 def pages_per_call() -> int:
@@ -426,9 +446,13 @@ async def scan(
     holders: int = config.WHALE_DEFAULT_HOLDERS,
     now: float | None = None,
     save: bool = True,
-    save_dir: str | Path = config.WHALE_SCANS_DIR,
+    save_dir: str | Path | None = None,
+    credit_cap: int | None = None,
 ) -> dict:
-    """Runs one whale accumulation scan for `token` on `network` over the last `days` (7 or 30)."""
+    """Runs one whale accumulation scan for `token` on `network` over the last `days` (7 or 30).
+
+    `credit_cap` (default WHALE_MAX_CREDITS_PER_SCAN) stops new wallets from being started once the scan
+    could go past it; those wallets come back as "Not scanned"."""
     if network not in config.WHALE_NETWORKS:
         raise WhaleScanInputError(f"network must be one of {', '.join(config.WHALE_NETWORKS)}")
     token = (token or "").strip()
@@ -491,9 +515,32 @@ async def scan(
     exchange_addresses = {e["address"].lower() for e in excluded if e["reason_code"] == "exchange_label"}
     # contract wallets and pools: sending tokens there is locking / adding to an LP, not selling
     locked_info = {e["address"].lower(): {"label": e["label"], "reason_code": e["reason_code"]} for e in excluded if e["reason_code"] in ("contract_label", "liquidity_pool")}
-    whales = await asyncio.gather(*(_analyze_whale(client, network, token, h, v, price_usd, frm, to, exchange_addresses, locked_info) for h, v in whales_in))
+    # Safety cap for the whole scan: a wallet is only started while (credits used so far) + (the worst case of
+    # every wallet in flight, including this one) still fits under the cap. Wallets are started in rank order,
+    # so the ones left out are the smallest holders.
+    cap = config.WHALE_MAX_CREDITS_PER_SCAN if credit_cap is None else credit_cap
+    worst_case = pages_per_call() * 2
+    gate = asyncio.Semaphore(max(1, config.WHALE_CONCURRENCY))
+    in_flight = 0
+
+    async def run_wallet(h: dict, v: dict) -> dict:
+        nonlocal in_flight
+        async with gate:
+            used = getattr(client, "credits_used", 0) - credits0
+            if used + (in_flight + 1) * worst_case > cap:
+                return _not_scanned(h, v)
+            in_flight += 1
+            try:
+                return await _analyze_whale(client, network, token, h, v, price_usd, frm, to, exchange_addresses, locked_info)
+            finally:
+                in_flight -= 1
+
+    whales = await asyncio.gather(*(run_wallet(h, v) for h, v in whales_in))
+    skipped = [w for w in whales if w["stance"] == NOT_SCANNED]
     incomplete = [w for w in whales if not w["error"] and w["stance"] == INCOMPLETE]
-    ok = [w for w in whales if not w["error"] and w["stance"] != INCOMPLETE]  # only these count toward totals
+    ok = [w for w in whales if not w["error"] and w["stance"] not in (INCOMPLETE, NOT_SCANNED)]  # only these count toward totals
+    if skipped:
+        warnings.append(f"Credit cap of {cap:,} reached: {len(skipped)} smaller wallet{'s' if len(skipped) != 1 else ''} (#{skipped[0]['rank']} onward) not scanned and left out of the totals")
     for w in incomplete:
         warnings.append(f"Incomplete data: #{w['rank']} {w['short']} is a {INCOMPLETE_REASON} and hit the page limit; its stance is not given and it is left out of the totals")
     count = lambda name: sum(1 for w in ok if w["stance"] == name)  # noqa: E731
@@ -506,7 +553,8 @@ async def scan(
         "distributing": count("Distributing"),
         "holding": count("Holding"),
         "incomplete": len(incomplete),
-        "errors": len(whales) - len(ok) - len(incomplete),
+        "not_scanned": len(skipped),
+        "errors": len(whales) - len(ok) - len(incomplete) - len(skipped),
         "total_net_flow_tokens": sum(w["net_flow_tokens"] for w in ok),
         "total_net_flow_usd": sum(w["net_flow_usd"] for w in ok),
         "totals": {b: {"tokens": sum(w["breakdown"][b]["tokens"] for w in ok), "usd": sum(w["breakdown"][b]["usd"] for w in ok)} for b in BUCKETS},
@@ -516,6 +564,7 @@ async def scan(
         "token": token,
         "symbol": attrs.get("symbol"),
         "name": attrs.get("name"),
+        "image_url": attrs.get("image_url") if attrs.get("image_url") not in (None, "missing.png") else None,
         "price_usd": price_usd,
         "market": market,
         "days": days,
@@ -530,5 +579,5 @@ async def scan(
         "saved_to": None,
     }
     if save:
-        save_scan(result, save_dir, now)
+        save_scan(result, save_dir or config.WHALE_SCANS_DIR, now)
     return result
