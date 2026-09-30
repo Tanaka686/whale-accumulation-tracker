@@ -1,4 +1,4 @@
-/* Smart Money Radar: a deliberately plain, inspectable UI. */
+/* Whale Accumulation Tracker (Radar, Wallets, Follow and Runs tabs): a deliberately plain, inspectable UI. */
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const usd = (v, signed=false) => v == null ? "—" : `${v < 0 ? "−" : signed && v > 0 ? "+" : ""}$${Math.abs(Number(v)).toLocaleString(undefined,{maximumFractionDigits:2})}`;

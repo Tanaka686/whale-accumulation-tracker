@@ -137,7 +137,7 @@ def cmd_article_kit(args):
     equity = runs.read_equity(run_dir)
     scenario_metrics = metrics.get("blind") or metrics.get("metrics") or metrics
     paths = build_article_kit(
-        title=f"Smart Money Radar: {run_id}",
+        title=f"Whale Accumulation Tracker: {run_id}",
         handle=args.handle or "yourhandle",
         metrics=scenario_metrics,
         equity_curve=equity,

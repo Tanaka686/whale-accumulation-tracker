@@ -76,5 +76,5 @@ WHALE_EXPLORERS = {"eth": "https://etherscan.io", "base": "https://basescan.org"
 
 WHALE_SCANS_DIR = "data/whales"  # one JSON file per scan (kept out of runs/ so the Runs tab is not confused)
 
-REPO_NAME = "smart-money-radar"
+REPO_NAME = "whale-accumulation-tracker"
 BASE_URL_UTM = f"utm_source=github&utm_content={REPO_NAME}"

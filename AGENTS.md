@@ -1,4 +1,4 @@
-# Agent notes for Smart Money Radar
+# Agent notes for Whale Accumulation Tracker
 
 This repo is meant to be forked and reskinned by an AI coding agent. Keep changes small and
 readable -- the next agent to touch this (maybe you, in a later session) has to understand it fast.

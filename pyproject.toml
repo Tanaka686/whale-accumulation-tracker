@@ -1,7 +1,7 @@
 [project]
-name = "smart-money-radar"
+name = "whale-accumulation-tracker"
 version = "0.1.0"
-description = "Scan today's hottest tokens, find the wallets trading them, score them, and paper copy-trade the best ones."
+description = "See whether a token's biggest holders are buying, selling or holding. Also scans hot tokens, scores the wallets trading them and paper copy-trades the best ones."
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.27",

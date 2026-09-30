@@ -420,7 +420,7 @@ table {{ border-collapse:collapse; width:100%; }} th {{ color:#8e9c92; font-size
 @media(max-width:800px) {{ .metrics {{ grid-template-columns:repeat(2,1fr); }} h1 {{ font-size:31px; }} .wrap {{ padding:25px 16px 60px; }} }}
 </style></head>
 <body>
-<main class="wrap"><div class="eyebrow">CoinGecko API · Smart Money Radar</div><h1>{esc(prettify_run_name(run_name))}</h1>
+<main class="wrap"><div class="eyebrow">CoinGecko API · Whale Accumulation Tracker</div><h1>{esc(prettify_run_name(run_name))}</h1>
 <p class="sub">Paper-trading evidence with wallet signals, token context, and an auditable decision feed.</p>
 <section class="metrics">{metric_html}</section>
 <section class="panel"><h2>Equity curve</h2><div class="chart-legend"><span><span class="swatch strategy"></span>Strategy</span>{'<span><span class="swatch benchmark"></span>Benchmark</span>' if benchmark else ''}</div><div class="chart-card">{chart_svg}</div></section>

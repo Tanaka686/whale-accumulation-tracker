@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
     await app.state.client.close()
 
 
-app = FastAPI(title="Smart Money Radar", lifespan=lifespan)
+app = FastAPI(title="Whale Accumulation Tracker", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(WEB)), name="static")
 app.mount("/core-web", StaticFiles(directory=str(ROOT / "core" / "web")), name="core-web")
 app.mount("/brand", StaticFiles(directory=str(ROOT / "core" / "brand")), name="brand")
@@ -855,7 +855,7 @@ def _build_kit(run_dir: Path, handle: str, screenshot_urls: list[str] | None) ->
         raise HTTPException(404, "no metrics for this run")
     scenario_metrics = metrics.get("blind") or metrics.get("metrics") or metrics
     return build_article_kit(
-        title=f"Smart Money Radar: {run_dir.name}",
+        title=f"Whale Accumulation Tracker: {run_dir.name}",
         handle=handle,
         metrics=scenario_metrics,
         equity_curve=runs.read_equity(run_dir),

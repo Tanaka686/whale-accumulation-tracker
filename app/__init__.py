@@ -1,1 +1,1 @@
-"""Smart Money Radar: scan hot tokens, find and score the wallets trading them, paper copy-trade the best ones."""
+"""Whale Accumulation Tracker: are a token's biggest holders buying or selling? Also scans hot tokens, scores the wallets trading them and paper copy-trades the best ones."""
