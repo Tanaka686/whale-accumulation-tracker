@@ -292,8 +292,11 @@ async def test_scan_end_to_end(tmp_path):
 
     s = result["summary"]
     assert (s["whales"], s["excluded"], s["new_position"], s["accumulating"], s["distributing"], s["holding"], s["errors"]) == (4, 2, 1, 1, 1, 1, 0)
-    assert s["total_net_flow_tokens"] == 21 - 30 + 0 + 800
-    assert s["total_net_flow_usd"] == 42 - 60 + 0 + 1600  # the 800-token transfer priced at 2.0
+    # rank 6's 800 tokens come from the token's own pool (POOL is a transfer's default counterparty), so they
+    # are Locked/LP: they set its start balance to zero (New position) but are not part of the net flow
+    assert s["total_net_flow_tokens"] == 21 - 30 + 0
+    assert s["total_net_flow_usd"] == 42 - 60 + 0
+    assert s["totals"]["locked_lp"] == {"tokens": 800, "usd": 1600}  # priced at 2.0
     assert result["symbol"] == "TST" and result["price_usd"] == 2.0
 
 
@@ -341,7 +344,8 @@ async def test_a_wallet_that_fails_is_reported_and_left_out_of_the_totals(tmp_pa
     assert bad["error"] and bad["stance"] is None
     assert result["summary"]["errors"] == 1
     assert result["summary"]["distributing"] == 0
-    assert result["summary"]["total_net_flow_tokens"] == 21 + 0 + 800
+    assert result["summary"]["total_net_flow_tokens"] == 21 + 0  # rank 6's 800 are Locked/LP (from the pool), not net flow
+    assert result["summary"]["totals"]["locked_lp"]["tokens"] == 800
 
 
 async def test_a_wallet_with_a_zero_starting_balance_is_a_new_position(tmp_path):

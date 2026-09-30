@@ -6,12 +6,15 @@
 2. For each whale: its trades and transfers of this token inside the window (two calls, cursor-paginated).
 3. combine_events(): a swap shows up as a trade AND as a token transfer with the same tx hash. The trade
    wins, so a swap is never counted twice.
-4. compute_flow(): net flow = (bought + transferred in) - (sold + transferred out), in tokens and USD,
-   split into DEX (trades), exchange (transfers to/from the exchange wallets we excluded) and other
-   transfers. flow_reason() names the biggest part ("mostly exchange withdrawal").
-5. stance_for(): the balance at the start of the window is current balance - net flow (the API has no
-   historical balances), then New position / Accumulating / Distributing / Holding. The stance uses the
-   total. A wallet that hit the page limit gets "Incomplete data" instead and stays out of the totals.
+4. compute_flow(): movement in tokens and USD, split into DEX (trades), exchange (transfers to/from the
+   exchange wallets we excluded), locked/LP (transfers to/from the excluded contracts and pools:
+   Voting Escrow, LP, gauge, vault) and other transfers. Net flow = DEX + exchange + other; locked/LP is
+   shown on its own and is never a buy or a sell. flow_reason() names the biggest of the four parts
+   ("mostly exchange withdrawal", "mostly locked into Voting Escrow").
+5. stance_for(): the balance at the start of the window is current balance - net flow - locked/LP (the
+   API has no historical balances), then New position / Accumulating / Distributing / Holding is judged
+   on the net flow (without locked/LP). A wallet that hit the page limit gets "Incomplete data" instead
+   and stays out of the totals.
 6. scan(): runs all of it and saves the result as one JSON file per scan.
 
 Known limits (also written into each result's `warnings`): only *current* top holders are listed, so a
@@ -161,21 +164,31 @@ def combine_events(trades: list[dict], transfers: list[dict]) -> tuple[list[dict
 # ---- 4. net flow ----
 
 
-BUCKETS = ("dex", "exchange", "other_transfers")
-BUCKET_LABELS = {"dex": "DEX", "exchange": "exchange", "other_transfers": "other transfers"}
+BUCKETS = ("dex", "exchange", "other_transfers", "locked_lp")
+STANCE_BUCKETS = ("dex", "exchange", "other_transfers")  # locked_lp is shown but never drives the stance or the totals
+BUCKET_LABELS = {"dex": "DEX", "exchange": "exchange", "other_transfers": "other transfers", "locked_lp": "locked/LP"}
+_ZERO = {"tokens": 0.0, "usd": 0.0}
 
 
-def compute_flow(events: list[dict], price_usd: float | None, exchange_addresses=()) -> dict:
-    """Net flow = (bought + transferred in) - (sold + transferred out), in tokens and in USD, split in 3:
-      dex             trades: bought - sold
+def compute_flow(events: list[dict], price_usd: float | None, exchange_addresses=(), locked_addresses=()) -> dict:
+    """Net flow in tokens and in USD, split in 4 (in minus out for transfers, bought minus sold for trades):
+      dex             trades
       exchange        transfers whose counterparty is one of `exchange_addresses` (the exchange wallets we
                       excluded): a withdrawal from an exchange is positive, a deposit to one is negative
-      other_transfers every other transfer, in minus out
+      locked_lp       transfers whose counterparty is one of `locked_addresses` (the contract wallets and
+                      pools we excluded: Voting Escrow, LP, gauge, vault...). Locking or adding to an LP is
+                      negative, unlocking or removing is positive. It is NOT part of net_tokens / net_usd.
+      other_transfers every other transfer
+    `net_tokens` / `net_usd` = dex + exchange + other_transfers (what the stance and the totals use).
+    `all_tokens` / `all_usd` also include locked_lp (what actually left or entered the wallet).
     Trades use their own USD volume; transfers are priced at `price_usd` (today's price). If there is
-    no price, transfer USD is left out and `usd_incomplete` is set."""
+    no price, transfer USD is left out and `usd_incomplete` is set. `locked_targets` lists the contracts
+    behind locked_lp, biggest first."""
     exchanges = {a.lower() for a in exchange_addresses}
+    lockers = {a.lower() for a in locked_addresses}
     parts = {k: {"tokens": 0.0, "usd": 0.0} for k in ("bought", "sold", "transferred_in", "transferred_out")}
     breakdown = {k: {"tokens": 0.0, "usd": 0.0} for k in BUCKETS}
+    targets: dict[str, dict] = {}
     usd_incomplete = False
     for e in events:
         name = {("trade", "in"): "bought", ("trade", "out"): "sold", ("transfer", "in"): "transferred_in", ("transfer", "out"): "transferred_out"}[(e["source"], e["direction"])]
@@ -187,13 +200,27 @@ def compute_flow(events: list[dict], price_usd: float | None, exchange_addresses
             usd = 0.0
         parts[name]["tokens"] += e["amount"]
         parts[name]["usd"] += usd
-        bucket = "dex" if e["source"] == "trade" else "exchange" if e.get("counterparty") in exchanges else "other_transfers"
+        cp = e.get("counterparty")
+        bucket = "dex" if e["source"] == "trade" else "locked_lp" if cp in lockers else "exchange" if cp in exchanges else "other_transfers"
         sign = 1 if e["direction"] == "in" else -1
         breakdown[bucket]["tokens"] += sign * e["amount"]
         breakdown[bucket]["usd"] += sign * usd
-    net_tokens = parts["bought"]["tokens"] + parts["transferred_in"]["tokens"] - parts["sold"]["tokens"] - parts["transferred_out"]["tokens"]
-    net_usd = parts["bought"]["usd"] + parts["transferred_in"]["usd"] - parts["sold"]["usd"] - parts["transferred_out"]["usd"]
-    return {**parts, "breakdown": breakdown, "net_tokens": net_tokens, "net_usd": net_usd, "usd_incomplete": usd_incomplete}
+        if bucket == "locked_lp":
+            t = targets.setdefault(cp, {"address": cp, "tokens": 0.0, "usd": 0.0})
+            t["tokens"] += sign * e["amount"]
+            t["usd"] += sign * usd
+    net_tokens = sum(breakdown[b]["tokens"] for b in STANCE_BUCKETS)
+    net_usd = sum(breakdown[b]["usd"] for b in STANCE_BUCKETS)
+    return {
+        **parts,
+        "breakdown": breakdown,
+        "net_tokens": net_tokens,
+        "net_usd": net_usd,
+        "all_tokens": net_tokens + breakdown["locked_lp"]["tokens"],
+        "all_usd": net_usd + breakdown["locked_lp"]["usd"],
+        "locked_targets": sorted(targets.values(), key=lambda t: -abs(t["usd"] or t["tokens"])),
+        "usd_incomplete": usd_incomplete,
+    }
 
 
 _REASON_TEXT = {
@@ -206,28 +233,49 @@ _REASON_TEXT = {
 }
 
 
-def flow_reason(breakdown: dict) -> tuple[str, str | None]:
-    """(short reason, dominant bucket) for a wallet's net flow: the part with the largest absolute size,
-    named "mostly ..." when it is at least half of all movement, otherwise "mixed". Sizes are compared in
-    USD (in tokens when there is no USD at all)."""
-    key = "usd" if any(abs(breakdown[b]["usd"]) > 0 for b in BUCKETS) else "tokens"
-    sizes = {b: breakdown[b][key] for b in BUCKETS}
+def describe_locked(sign: int, target: dict | None) -> str:
+    """Plain words for where locked/LP tokens went (sign < 0) or came from (sign > 0)."""
+    label = ((target or {}).get("label") or "").strip()
+    if "voting escrow" in label.lower():
+        return "locked into Voting Escrow" if sign < 0 else "unlocked from Voting Escrow"
+    if (target or {}).get("reason_code") == "liquidity_pool" or (label and _match_keyword(label, ["LP", "AMM", "Pool"])):
+        return "added to a liquidity pool" if sign < 0 else "removed from a liquidity pool"
+    if label:
+        return f'sent to "{label}"' if sign < 0 else f'received from "{label}"'
+    return "sent to a contract" if sign < 0 else "received from a contract"
+
+
+def flow_reason(breakdown: dict, locked_target: dict | None = None) -> tuple[str, str | None]:
+    """(short reason, dominant bucket) for a wallet's movement: the part with the largest absolute size,
+    named "mostly ..." when it is at least half of all movement, otherwise "mixed". All four parts are
+    compared, so a wallet that mostly locked its tokens says so (and its stance stays Holding). Sizes are
+    compared in USD (in tokens when there is no USD at all). `locked_target` ({label, reason_code}) names
+    the contract when locked/LP is the biggest part."""
+    get = lambda b, k: (breakdown.get(b) or _ZERO)[k]  # noqa: E731
+    key = "usd" if any(abs(get(b, "usd")) > 0 for b in BUCKETS) else "tokens"
+    sizes = {b: get(b, key) for b in BUCKETS}
     total = sum(abs(v) for v in sizes.values())
     if total == 0:
         return "no net movement in the window", None
     top = max(sizes, key=lambda b: abs(sizes[b]))
     if abs(sizes[top]) / total < 0.5:
         return "mixed: no single source dominates", None
-    return _REASON_TEXT[(top, 1 if sizes[top] > 0 else -1)], top
+    sign = 1 if sizes[top] > 0 else -1
+    if top == "locked_lp":
+        return f"mostly {describe_locked(sign, locked_target)}", top
+    return _REASON_TEXT[(top, sign)], top
 
 
 # ---- 5. stance ----
 
 
-def stance_for(current_balance: float, net_tokens: float) -> dict:
+def stance_for(current_balance: float, net_tokens: float, locked_tokens: float = 0.0) -> dict:
     """The wallet's stance from its current balance and its net flow over the window.
 
-    start = current - net flow (the API has no historical balances).
+    `net_tokens` is dex + exchange + other transfers. `locked_tokens` is the locked/LP part (negative =
+    locked or added to an LP): it moved the balance, so it is part of the start balance, but it is not a
+    buy or a sell, so it is never part of the flow the stance is judged on.
+      start = current - net flow - locked   (the API has no historical balances)
       start < 1% of current                -> "New position"
       net flow > +2% of start              -> "Accumulating"
       net flow < -2% of start              -> "Distributing"
@@ -236,7 +284,7 @@ def stance_for(current_balance: float, net_tokens: float) -> dict:
     fetched); it is treated as zero and flagged in `warning`."""
     if current_balance <= 0:
         return {"stance": None, "start_balance": None, "net_pct_of_start": None, "warning": "current balance is zero"}
-    start = current_balance - net_tokens
+    start = current_balance - net_tokens - locked_tokens
     warning = None
     if start < 0:
         warning = "start balance came out negative: flow data and holder snapshot disagree; treated as zero"
@@ -266,7 +314,7 @@ def _window(now: float, days: int) -> tuple[str, str]:
 INCOMPLETE = "Incomplete data"
 
 
-async def _analyze_whale(client, network: str, token: str, holder: dict, verdict: dict, price_usd: float | None, frm: str, to: str, exchange_addresses=()) -> dict:
+async def _analyze_whale(client, network: str, token: str, holder: dict, verdict: dict, price_usd: float | None, frm: str, to: str, exchange_addresses=(), locked_info: dict | None = None) -> dict:
     balance = _f(holder.get("amount"), 0.0) or 0.0
     row = {
         "rank": holder.get("rank"),
@@ -290,8 +338,10 @@ async def _analyze_whale(client, network: str, token: str, holder: dict, verdict
         return {**row, "stance": None, "stance_reason": None, "breakdown": None, "error": f"{type(e).__name__}: {str(e)[:120]}", "warnings": []}
     t_events, x_events = trade_events(trades, token), transfer_events(transfers, token)
     events, dropped = combine_events(t_events, x_events)
-    flow = compute_flow(events, price_usd, exchange_addresses)
-    st = stance_for(balance, flow["net_tokens"])
+    locked_info = locked_info or {}
+    flow = compute_flow(events, price_usd, exchange_addresses, locked_info.keys())
+    st = stance_for(balance, flow["net_tokens"], flow["breakdown"]["locked_lp"]["tokens"])
+    targets = [{**t, "label": (locked_info.get(t["address"]) or {}).get("label"), "reason_code": (locked_info.get(t["address"]) or {}).get("reason_code")} for t in flow["locked_targets"]]
     warnings = []
     if st["warning"]:
         warnings.append(st["warning"])
@@ -299,7 +349,7 @@ async def _analyze_whale(client, network: str, token: str, holder: dict, verdict
     # no stance is given and the wallet is kept out of the totals.
     row_cap = PER_PAGE * config.WHALE_MAX_PAGES
     truncated = len(trades) >= row_cap or len(transfers) >= row_cap
-    reason, dominant = flow_reason(flow["breakdown"])
+    reason, dominant = flow_reason(flow["breakdown"], targets[0] if targets else None)
     if truncated:
         st = {"stance": INCOMPLETE, "start_balance": None, "net_pct_of_start": None}
         reason, dominant = "hit the page limit: flow is partial", None
@@ -316,6 +366,9 @@ async def _analyze_whale(client, network: str, token: str, holder: dict, verdict
         "net_flow_usd": flow["net_usd"],
         "net_flow_pct_of_start": st["net_pct_of_start"],
         "breakdown": flow["breakdown"],
+        "locked_lp_targets": targets[:3],
+        "all_movement_tokens": flow["all_tokens"],
+        "all_movement_usd": flow["all_usd"],
         "flows": {k: flow[k] for k in ("bought", "sold", "transferred_in", "transferred_out")},
         "trade_count": len(t_events),
         "transfer_count": len(x_events) - dropped,
@@ -399,7 +452,9 @@ async def scan(
             whales_in.append((h, verdict))
 
     exchange_addresses = {e["address"].lower() for e in excluded if e["reason_code"] == "exchange_label"}
-    whales = await asyncio.gather(*(_analyze_whale(client, network, token, h, v, price_usd, frm, to, exchange_addresses) for h, v in whales_in))
+    # contract wallets and pools: sending tokens there is locking / adding to an LP, not selling
+    locked_info = {e["address"].lower(): {"label": e["label"], "reason_code": e["reason_code"]} for e in excluded if e["reason_code"] in ("contract_label", "liquidity_pool")}
+    whales = await asyncio.gather(*(_analyze_whale(client, network, token, h, v, price_usd, frm, to, exchange_addresses, locked_info) for h, v in whales_in))
     incomplete = [w for w in whales if not w["error"] and w["stance"] == INCOMPLETE]
     ok = [w for w in whales if not w["error"] and w["stance"] != INCOMPLETE]  # only these count toward totals
     for w in incomplete:

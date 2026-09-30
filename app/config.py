@@ -45,7 +45,10 @@ WHALE_WINDOW_DAYS = (7, 30)  # the choices offered; the first one is the default
 WHALE_DEFAULT_HOLDERS = 50  # the API returns at most 50 holders on non-Solana networks
 WHALE_MAX_PAGES = 5  # trade/transfer pages (300 rows each) fetched per whale; a full last page is flagged "truncated"
 
-WHALE_CONTRACT_KEYWORDS = ["Voting Escrow", "AMM", "LP", "Pool", "Router", "Vault", "Bridge", "Token", "Contract"]
+# Wallets excluded by these keywords (or as one of the token's pools) are also the "Locked/LP" side of the
+# flow: tokens sent to or received from them (locking in Voting Escrow, adding to an LP, a gauge or a vault)
+# are shown as their own part and never count as accumulating or distributing.
+WHALE_CONTRACT_KEYWORDS = ["Voting Escrow", "AMM", "LP", "Pool", "Router", "Vault", "Gauge", "Bridge", "Token", "Contract"]
 WHALE_EXCHANGE_KEYWORDS = [
     "Hot Wallet", "Cold Wallet", "Exchange",
     "Binance", "Coinbase", "Kraken", "OKX", "Bybit", "KuCoin", "Bitget", "Gate.io", "HTX", "Huobi",
