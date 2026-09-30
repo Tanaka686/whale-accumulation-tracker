@@ -311,9 +311,12 @@ class CoinGeckoClient:
         d = await self.get(f"/onchain/networks/{network}/tokens/{token}/top_traders", {"traders": n, "sort": sort, "include_address_label": "true"}, ttl=120)
         return d.get("data", {}).get("attributes", {}).get("traders", [])
 
-    async def top_holders(self, network: str, token: str, n: int = 20) -> list[dict]:
-        """Top holders of a token."""
-        d = await self.get(f"/onchain/networks/{network}/tokens/{token}/top_holders", {"holders": n}, ttl=120)
+    async def top_holders(self, network: str, token: str, n: int = 20, include_pnl_details: bool = False) -> list[dict]:
+        """Top holders of a token. `include_pnl_details` adds per-holder PnL and buy/sell counts (often null)."""
+        params: dict = {"holders": n}
+        if include_pnl_details:
+            params["include_pnl_details"] = "true"
+        d = await self.get(f"/onchain/networks/{network}/tokens/{token}/top_holders", params, ttl=120)
         return d.get("data", {}).get("attributes", {}).get("holders", [])
 
     # ---- wallets ----
@@ -329,9 +332,32 @@ class CoinGeckoClient:
         d = await self.get(f"/onchain/wallets/{address}/pnl", params, ttl=300)
         return d.get("data", {}).get("attributes", {})
 
-    async def wallet_trades(self, network: str, address: str, max_pages: int = config.DEFAULT_MAX_PAGES, per_page: int | None = None) -> list[dict]:
-        """Cursor-paginated swap history for a wallet on one network."""
-        params = {"per_page": per_page} if per_page else {}
+    @staticmethod
+    def _wallet_filters(params: dict, token: str | None, from_ts: str | int | None, to_ts: str | int | None) -> dict:
+        """Adds the optional token filter and from/to window shared by the wallet trades and transfers calls.
+
+        The API returns a 400 if only one of from/to is given, so this fails early instead."""
+        if (from_ts is None) != (to_ts is None):
+            raise ValueError("from_ts and to_ts must be given together")
+        if token:
+            params["token"] = token
+        if from_ts is not None:
+            params["from"] = from_ts
+            params["to"] = to_ts
+        return params
+
+    async def wallet_trades(
+        self,
+        network: str,
+        address: str,
+        max_pages: int = config.DEFAULT_MAX_PAGES,
+        per_page: int | None = None,
+        token: str | None = None,
+        from_ts: str | int | None = None,
+        to_ts: str | int | None = None,
+    ) -> list[dict]:
+        """Cursor-paginated swap history for a wallet on one network, optionally for one token and a from/to window (max 30 days)."""
+        params = self._wallet_filters({"per_page": per_page} if per_page else {}, token, from_ts, to_ts)
         return await self._paginate(f"/onchain/networks/{network}/wallets/{address}/trades", params, max_pages)
 
     async def wallet_balances(self, address: str, networks: list[str], per_page: int | None = None, value_usd_min: float | None = None) -> dict:
@@ -345,9 +371,25 @@ class CoinGeckoClient:
         d = await self.get(f"/onchain/wallets/{address}/balances", params, ttl=60)
         return d.get("data", {}).get("attributes", {})
 
-    async def wallet_transfers(self, network: str, address: str, max_pages: int = config.DEFAULT_MAX_PAGES, per_page: int | None = None) -> list[dict]:
-        """Cursor-paginated raw transfers for a wallet on one network (7-day default window)."""
-        params = {"per_page": per_page} if per_page else {}
+    async def wallet_transfers(
+        self,
+        network: str,
+        address: str,
+        max_pages: int = config.DEFAULT_MAX_PAGES,
+        per_page: int | None = None,
+        token: str | None = None,
+        from_ts: str | int | None = None,
+        to_ts: str | int | None = None,
+        direction: str | None = None,
+    ) -> list[dict]:
+        """Cursor-paginated raw transfers for a wallet on one network (7-day default window, max 30 days with from/to).
+
+        `direction` is "in" or "out"; omit it for both."""
+        if direction not in (None, "in", "out"):
+            raise ValueError("direction must be 'in' or 'out'")
+        params = self._wallet_filters({"per_page": per_page} if per_page else {}, token, from_ts, to_ts)
+        if direction:
+            params["direction"] = direction
         return await self._paginate(f"/onchain/networks/{network}/wallets/{address}/transfers", params, max_pages)
 
     # ---- account + market ----

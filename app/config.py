@@ -30,5 +30,39 @@ SAFE_MOVERS_FILTERS = {
 
 RUNS_DIR = "runs"
 
+# =====================================================================================
+# WHALE ACCUMULATION TRACKER (app/accumulation.py) -- edit the lists below freely.
+# =====================================================================================
+# Each holder's CoinGecko `label` is matched, case-insensitively, against these keyword lists in
+# this order: contract, then exchange, then multisig. First match wins.
+#   contract / exchange -> EXCLUDED from the whale list (still shown, with the label and the reason)
+#   multisig            -> KEPT as a whale and tagged "Multisig"
+#   any other label     -> KEPT as a whale, and the label is shown in the table
+# Keywords of 3 characters or fewer (AMM, LP, OKX) must match a whole word; longer ones match anywhere
+# in the label ("Pool" matches "Liquidity Pool").
+WHALE_NETWORKS = ["eth", "base", "bsc"]
+WHALE_WINDOW_DAYS = (7, 30)  # the choices offered; the first one is the default
+WHALE_DEFAULT_HOLDERS = 50  # the API returns at most 50 holders on non-Solana networks
+WHALE_MAX_PAGES = 5  # trade/transfer pages (300 rows each) fetched per whale; a full last page is flagged "truncated"
+
+WHALE_CONTRACT_KEYWORDS = ["Voting Escrow", "AMM", "LP", "Pool", "Router", "Vault", "Bridge", "Token", "Contract"]
+WHALE_EXCHANGE_KEYWORDS = [
+    "Hot Wallet", "Cold Wallet", "Exchange",
+    "Binance", "Coinbase", "Kraken", "OKX", "Bybit", "KuCoin", "Bitget", "Gate.io", "HTX", "Huobi",
+    "Crypto.com", "MEXC", "Bitfinex", "Bitstamp", "Gemini", "Upbit", "Bithumb", "Robinhood",
+]
+WHALE_MULTISIG_KEYWORDS = ["Gnosis Safe", "Safe Proxy", "Multisig", "Multi-sig"]
+WHALE_BURN_ADDRESSES = [
+    "0x0000000000000000000000000000000000000000",
+    "0x000000000000000000000000000000000000dead",
+    "0xdead000000000000000000000000000000000000",
+]
+
+# Stance rules (share of the wallet's balance at the start of the window):
+WHALE_NEW_POSITION_MAX_START_PCT = 1.0  # start balance below 1% of the current balance -> "New position"
+WHALE_STANCE_THRESHOLD_PCT = 2.0  # net flow above +2% of the start balance -> Accumulating, below -2% -> Distributing
+
+WHALE_SCANS_DIR = "data/whales"  # one JSON file per scan (kept out of runs/ so the Runs tab is not confused)
+
 REPO_NAME = "smart-money-radar"
 BASE_URL_UTM = f"utm_source=github&utm_content={REPO_NAME}"
