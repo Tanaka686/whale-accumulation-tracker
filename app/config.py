@@ -43,7 +43,12 @@ RUNS_DIR = "runs"
 WHALE_NETWORKS = ["eth", "base", "bsc"]
 WHALE_WINDOW_DAYS = (7, 30)  # the choices offered; the first one is the default
 WHALE_DEFAULT_HOLDERS = 50  # the API returns at most 50 holders on non-Solana networks
-WHALE_MAX_PAGES = 5  # trade/transfer pages (300 rows each) fetched per whale; a full last page is flagged "truncated"
+WHALE_MAX_PAGES = 10  # trade/transfer pages (300 rows each, so ~3,000 rows) fetched per call
+WHALE_MAX_CREDITS_PER_WALLET = 20  # hard cap per whale (1 credit per page, trades + transfers together): pages per call = min(WHALE_MAX_PAGES, this / 2)
+# A wallet that fills every page it is allowed is "Incomplete data" ("very active wallet, possible bot or market maker")
+# and stays out of the totals.
+WHALE_VOLUME_LIQUIDITY_WARN_RATIO = 50  # warn when the token's 24h volume is more than this many times its liquidity
+WHALE_LOCKED_INFLOW_MIN_SHARE = 0.5  # a "New position" whose inflow is at least this share Locked/LP (removed from a pool...) is "Holding"
 
 # Wallets excluded by these keywords (or as one of the token's pools) are also the "Locked/LP" side of the
 # flow: tokens sent to or received from them (locking in Voting Escrow, adding to an LP, a gauge or a vault)

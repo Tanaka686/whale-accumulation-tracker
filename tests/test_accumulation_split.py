@@ -145,7 +145,7 @@ async def test_a_truncated_wallet_is_incomplete_and_kept_out_of_the_totals(tmp_p
     bad = by_rank[3]
     assert bad["stance"] == "Incomplete data"
     assert bad["truncated"] is True and bad["start_balance"] is None and bad["net_flow_pct_of_start"] is None
-    assert "page limit" in bad["stance_reason"] and bad["warnings"]
+    assert bad["stance_reason"] == "very active wallet (possible bot or market maker)" and bad["warnings"]
 
     s = result["summary"]
     assert s["incomplete"] == 1 and s["errors"] == 0

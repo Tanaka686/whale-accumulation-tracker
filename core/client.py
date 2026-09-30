@@ -112,7 +112,8 @@ class CoinGeckoClient:
         await self.close()
 
     async def get(self, path: str, params: dict | None = None, ttl: float = 0) -> Any:
-        """GET with TTL cache, 429 backoff, and plan/key-type error detection. Never logs the URL."""
+        """GET with TTL cache, retries on 429/408/5xx (up to MAX_RETRIES tries, waiting a little longer each time),
+        and plan/key-type error detection. Never logs the URL."""
         key = _cache_key(path, params)
         if ttl:
             hit = self.cache.get(key, ttl)
@@ -130,7 +131,9 @@ class CoinGeckoClient:
                         await asyncio.sleep(config.BACKOFF_BASE_S * (attempt + 1))
                         continue
                     raise NetworkError(exc) from exc
-                if response.status_code == 429 and attempt < config.MAX_RETRIES - 1:
+                # 429 (rate limit), 408 (request timeout) and any 5xx are worth another try after a short wait
+                retryable = response.status_code in (408, 429) or 500 <= response.status_code < 600
+                if retryable and attempt < config.MAX_RETRIES - 1:
                     await asyncio.sleep(config.BACKOFF_BASE_S * (attempt + 1))
                     continue
                 break

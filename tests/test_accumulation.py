@@ -36,7 +36,8 @@ def transfer(direction, amount, tx, **extra):
 class FakeWhaleClient:
     """Canned top_holders / token / wallet_trades / wallet_transfers answers, recording every call."""
 
-    def __init__(self, holders, pools=(), price="2", trades=None, transfers=None, fail=()):
+    def __init__(self, holders, pools=(), price="2", trades=None, transfers=None, fail=(), token_attrs=None):
+        self._token_attrs = token_attrs or {}
         self._holders = holders
         self._pools = list(pools)
         self._price = price
@@ -54,11 +55,11 @@ class FakeWhaleClient:
 
     async def token(self, network, address):
         self.credits_used += 1
-        return {"attributes": {"symbol": "TST", "name": "Test Token", "price_usd": self._price}, "pools": [{"attributes": {"address": p}} for p in self._pools]}
+        return {"attributes": {"symbol": "TST", "name": "Test Token", "price_usd": self._price, **self._token_attrs}, "pools": [{"attributes": {"address": p}} for p in self._pools]}
 
     async def _wallet(self, kind, network, address, max_pages, per_page, token, from_ts, to_ts):
         self.credits_used += 1
-        self.wallet_calls.append({"kind": kind, "address": address, "token": token, "from": from_ts, "to": to_ts, "per_page": per_page})
+        self.wallet_calls.append({"kind": kind, "address": address, "token": token, "from": from_ts, "to": to_ts, "per_page": per_page, "max_pages": max_pages})
         if address.lower() in self._fail:
             raise CoinGeckoError(500, "boom")
         source = self._trades if kind == "trades" else self._transfers
@@ -288,10 +289,12 @@ async def test_scan_end_to_end(tmp_path):
     assert by_rank[3]["net_flow_tokens"] == 21
     assert by_rank[4]["stance"] == "Distributing" and by_rank[4]["net_flow_tokens"] == -30
     assert by_rank[5]["stance"] == "Holding" and by_rank[5]["net_flow_tokens"] == 0
-    assert by_rank[6]["stance"] == "New position" and by_rank[6]["label"] == "Foundation Treasury"
+    # rank 6 started with ~0 only because its 800 tokens were in the pool and came back: Holding, not New position
+    assert by_rank[6]["stance"] == "Holding" and by_rank[6]["label"] == "Foundation Treasury"
+    assert by_rank[6]["stance_reason"] == "mostly removed from a liquidity pool"
 
     s = result["summary"]
-    assert (s["whales"], s["excluded"], s["new_position"], s["accumulating"], s["distributing"], s["holding"], s["errors"]) == (4, 2, 1, 1, 1, 1, 0)
+    assert (s["whales"], s["excluded"], s["new_position"], s["accumulating"], s["distributing"], s["holding"], s["errors"]) == (4, 2, 0, 1, 1, 2, 0)
     # rank 6's 800 tokens come from the token's own pool (POOL is a transfer's default counterparty), so they
     # are Locked/LP: they set its start balance to zero (New position) but are not part of the net flow
     assert s["total_net_flow_tokens"] == 21 - 30 + 0

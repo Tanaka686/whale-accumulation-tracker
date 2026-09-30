@@ -188,6 +188,7 @@ def compute_flow(events: list[dict], price_usd: float | None, exchange_addresses
     lockers = {a.lower() for a in locked_addresses}
     parts = {k: {"tokens": 0.0, "usd": 0.0} for k in ("bought", "sold", "transferred_in", "transferred_out")}
     breakdown = {k: {"tokens": 0.0, "usd": 0.0} for k in BUCKETS}
+    inflow = {k: {"tokens": 0.0, "usd": 0.0} for k in BUCKETS}  # gross amounts that came IN, per part
     targets: dict[str, dict] = {}
     usd_incomplete = False
     for e in events:
@@ -205,15 +206,22 @@ def compute_flow(events: list[dict], price_usd: float | None, exchange_addresses
         sign = 1 if e["direction"] == "in" else -1
         breakdown[bucket]["tokens"] += sign * e["amount"]
         breakdown[bucket]["usd"] += sign * usd
+        if sign > 0:
+            inflow[bucket]["tokens"] += e["amount"]
+            inflow[bucket]["usd"] += usd
         if bucket == "locked_lp":
-            t = targets.setdefault(cp, {"address": cp, "tokens": 0.0, "usd": 0.0})
+            t = targets.setdefault(cp, {"address": cp, "tokens": 0.0, "usd": 0.0, "in_tokens": 0.0, "in_usd": 0.0})
             t["tokens"] += sign * e["amount"]
             t["usd"] += sign * usd
+            if sign > 0:
+                t["in_tokens"] += e["amount"]
+                t["in_usd"] += usd
     net_tokens = sum(breakdown[b]["tokens"] for b in STANCE_BUCKETS)
     net_usd = sum(breakdown[b]["usd"] for b in STANCE_BUCKETS)
     return {
         **parts,
         "breakdown": breakdown,
+        "inflow": inflow,
         "net_tokens": net_tokens,
         "net_usd": net_usd,
         "all_tokens": net_tokens + breakdown["locked_lp"]["tokens"],
@@ -221,6 +229,15 @@ def compute_flow(events: list[dict], price_usd: float | None, exchange_addresses
         "locked_targets": sorted(targets.values(), key=lambda t: -abs(t["usd"] or t["tokens"])),
         "usd_incomplete": usd_incomplete,
     }
+
+
+def mostly_locked_inflow(flow: dict) -> bool:
+    """True when at least WHALE_LOCKED_INFLOW_MIN_SHARE of everything that came into the wallet was
+    Locked/LP (tokens removed from a pool, unlocked from Voting Escrow...) rather than bought or received."""
+    inflow = flow["inflow"]
+    key = "usd" if any(inflow[b]["usd"] > 0 for b in BUCKETS) else "tokens"
+    total = sum(inflow[b][key] for b in BUCKETS)
+    return total > 0 and inflow["locked_lp"][key] / total >= config.WHALE_LOCKED_INFLOW_MIN_SHARE
 
 
 _REASON_TEXT = {
@@ -312,6 +329,13 @@ def _window(now: float, days: int) -> tuple[str, str]:
 
 
 INCOMPLETE = "Incomplete data"
+INCOMPLETE_REASON = "very active wallet (possible bot or market maker)"
+
+
+def pages_per_call() -> int:
+    """Pages fetched for each of the two wallet calls (trades, transfers): WHALE_MAX_PAGES, but never more
+    than the per-wallet credit cap allows (1 credit per page, two calls per wallet)."""
+    return max(1, min(config.WHALE_MAX_PAGES, config.WHALE_MAX_CREDITS_PER_WALLET // 2))
 
 
 async def _analyze_whale(client, network: str, token: str, holder: dict, verdict: dict, price_usd: float | None, frm: str, to: str, exchange_addresses=(), locked_info: dict | None = None) -> dict:
@@ -327,10 +351,11 @@ async def _analyze_whale(client, network: str, token: str, holder: dict, verdict
         "balance_usd": _f(holder.get("value")),
         "error": None,
     }
+    pages = pages_per_call()
     try:
         trades, transfers = await asyncio.gather(
-            client.wallet_trades(network, holder["address"], max_pages=config.WHALE_MAX_PAGES, per_page=PER_PAGE, token=token, from_ts=frm, to_ts=to),
-            client.wallet_transfers(network, holder["address"], max_pages=config.WHALE_MAX_PAGES, per_page=PER_PAGE, token=token, from_ts=frm, to_ts=to),
+            client.wallet_trades(network, holder["address"], max_pages=pages, per_page=PER_PAGE, token=token, from_ts=frm, to_ts=to),
+            client.wallet_transfers(network, holder["address"], max_pages=pages, per_page=PER_PAGE, token=token, from_ts=frm, to_ts=to),
         )
     except PlanRestrictedError:
         raise
@@ -345,15 +370,20 @@ async def _analyze_whale(client, network: str, token: str, holder: dict, verdict
     warnings = []
     if st["warning"]:
         warnings.append(st["warning"])
-    # A full last page means the wallet has more rows than we fetched: the flow is a partial number, so
-    # no stance is given and the wallet is kept out of the totals.
-    row_cap = PER_PAGE * config.WHALE_MAX_PAGES
+    # Every page we were allowed to fetch came back full: the wallet has more rows than the cap, so the flow
+    # is a partial number. No stance is given and the wallet is kept out of the totals.
+    row_cap = PER_PAGE * pages
     truncated = len(trades) >= row_cap or len(transfers) >= row_cap
     reason, dominant = flow_reason(flow["breakdown"], targets[0] if targets else None)
+    if st["stance"] == "New position" and mostly_locked_inflow(flow):
+        # its starting balance is ~0 because the tokens were sitting in a pool / lock and came back: not a new buyer
+        top = max((t for t in targets if t["in_tokens"] > 0), key=lambda t: t["in_usd"] or t["in_tokens"], default=None)
+        st = {**st, "stance": "Holding"}
+        reason, dominant = f"mostly {describe_locked(1, top)}", "locked_lp"
     if truncated:
         st = {"stance": INCOMPLETE, "start_balance": None, "net_pct_of_start": None}
-        reason, dominant = "hit the page limit: flow is partial", None
-        warnings.append(f"hit the page limit ({row_cap} rows): stance not given and left out of the totals")
+        reason, dominant = INCOMPLETE_REASON, None
+        warnings.append(f"hit the cap of {pages} pages ({row_cap} rows) per call: stance not given and left out of the totals")
     if flow["usd_incomplete"]:
         warnings.append("no token price: USD for transfers is missing")
     return {
@@ -426,6 +456,13 @@ async def scan(
         warnings.append(f"could not load the token's pools ({type(e).__name__}); pool wallets are only caught by label")
     attrs = info.get("attributes") or {}
     price_usd = _f(attrs.get("price_usd"))
+    # the token call above already carries 24h volume and total liquidity, so this check costs nothing
+    volume_24h = _f((attrs.get("volume_usd") or {}).get("h24"))
+    liquidity = _f(attrs.get("total_reserve_in_usd"))
+    ratio = volume_24h / liquidity if volume_24h is not None and liquidity else None
+    market = {"volume_24h_usd": volume_24h, "liquidity_usd": liquidity, "volume_to_liquidity": ratio}
+    if ratio is not None and ratio > config.WHALE_VOLUME_LIQUIDITY_WARN_RATIO:
+        warnings.insert(0, "Volume looks unusually high compared to liquidity; possible bot or wash trading.")
     pool_addresses = {((p.get("attributes") or {}).get("address") or "").lower() for p in info.get("pools") or []} - {""}
     if len(holder_rows) < holders:
         warnings.append(f"the API returned {len(holder_rows)} holders (asked for {holders})")
@@ -458,7 +495,7 @@ async def scan(
     incomplete = [w for w in whales if not w["error"] and w["stance"] == INCOMPLETE]
     ok = [w for w in whales if not w["error"] and w["stance"] != INCOMPLETE]  # only these count toward totals
     for w in incomplete:
-        warnings.append(f"Incomplete data: #{w['rank']} {w['short']} hit the page limit; its stance is not given and it is left out of the totals")
+        warnings.append(f"Incomplete data: #{w['rank']} {w['short']} is a {INCOMPLETE_REASON} and hit the page limit; its stance is not given and it is left out of the totals")
     count = lambda name: sum(1 for w in ok if w["stance"] == name)  # noqa: E731
     summary = {
         "holders_fetched": len(holder_rows),
@@ -480,6 +517,7 @@ async def scan(
         "symbol": attrs.get("symbol"),
         "name": attrs.get("name"),
         "price_usd": price_usd,
+        "market": market,
         "days": days,
         "window": {"from": frm, "to": to},
         "holders_requested": holders,
