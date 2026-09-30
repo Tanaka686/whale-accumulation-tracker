@@ -6,9 +6,12 @@
 2. For each whale: its trades and transfers of this token inside the window (two calls, cursor-paginated).
 3. combine_events(): a swap shows up as a trade AND as a token transfer with the same tx hash. The trade
    wins, so a swap is never counted twice.
-4. compute_flow(): net flow = (bought + transferred in) - (sold + transferred out), in tokens and USD.
+4. compute_flow(): net flow = (bought + transferred in) - (sold + transferred out), in tokens and USD,
+   split into DEX (trades), exchange (transfers to/from the exchange wallets we excluded) and other
+   transfers. flow_reason() names the biggest part ("mostly exchange withdrawal").
 5. stance_for(): the balance at the start of the window is current balance - net flow (the API has no
-   historical balances), then New position / Accumulating / Distributing / Holding.
+   historical balances), then New position / Accumulating / Distributing / Holding. The stance uses the
+   total. A wallet that hit the page limit gets "Incomplete data" instead and stays out of the totals.
 6. scan(): runs all of it and saves the result as one JSON file per scan.
 
 Known limits (also written into each result's `warnings`): only *current* top holders are listed, so a
@@ -116,7 +119,7 @@ def trade_events(rows: list[dict], token: str) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-        out.append({"source": "trade", "direction": direction, "amount": amount, "usd": _f(r.get("volume_in_usd")), "tx": tx, "ts": _ts(r.get("block_timestamp"))})
+        out.append({"source": "trade", "direction": direction, "amount": amount, "usd": _f(r.get("volume_in_usd")), "tx": tx, "ts": _ts(r.get("block_timestamp")), "counterparty": None})
     return out
 
 
@@ -138,7 +141,9 @@ def transfer_events(rows: list[dict], token: str) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-        out.append({"source": "transfer", "direction": r["direction"], "amount": amount, "usd": None, "tx": tx, "ts": _ts(r.get("block_timestamp"))})
+        # the counterparty is whichever side of the transfer is not the queried wallet
+        counterparty = (r.get("from_address") if r["direction"] == "in" else r.get("to_address")) or ""
+        out.append({"source": "transfer", "direction": r["direction"], "amount": amount, "usd": None, "tx": tx, "ts": _ts(r.get("block_timestamp")), "counterparty": counterparty.lower()})
     return out
 
 
@@ -156,12 +161,21 @@ def combine_events(trades: list[dict], transfers: list[dict]) -> tuple[list[dict
 # ---- 4. net flow ----
 
 
-def compute_flow(events: list[dict], price_usd: float | None) -> dict:
-    """Net flow = (bought + transferred in) - (sold + transferred out), in tokens and in USD.
+BUCKETS = ("dex", "exchange", "other_transfers")
+BUCKET_LABELS = {"dex": "DEX", "exchange": "exchange", "other_transfers": "other transfers"}
 
+
+def compute_flow(events: list[dict], price_usd: float | None, exchange_addresses=()) -> dict:
+    """Net flow = (bought + transferred in) - (sold + transferred out), in tokens and in USD, split in 3:
+      dex             trades: bought - sold
+      exchange        transfers whose counterparty is one of `exchange_addresses` (the exchange wallets we
+                      excluded): a withdrawal from an exchange is positive, a deposit to one is negative
+      other_transfers every other transfer, in minus out
     Trades use their own USD volume; transfers are priced at `price_usd` (today's price). If there is
     no price, transfer USD is left out and `usd_incomplete` is set."""
+    exchanges = {a.lower() for a in exchange_addresses}
     parts = {k: {"tokens": 0.0, "usd": 0.0} for k in ("bought", "sold", "transferred_in", "transferred_out")}
+    breakdown = {k: {"tokens": 0.0, "usd": 0.0} for k in BUCKETS}
     usd_incomplete = False
     for e in events:
         name = {("trade", "in"): "bought", ("trade", "out"): "sold", ("transfer", "in"): "transferred_in", ("transfer", "out"): "transferred_out"}[(e["source"], e["direction"])]
@@ -173,9 +187,38 @@ def compute_flow(events: list[dict], price_usd: float | None) -> dict:
             usd = 0.0
         parts[name]["tokens"] += e["amount"]
         parts[name]["usd"] += usd
+        bucket = "dex" if e["source"] == "trade" else "exchange" if e.get("counterparty") in exchanges else "other_transfers"
+        sign = 1 if e["direction"] == "in" else -1
+        breakdown[bucket]["tokens"] += sign * e["amount"]
+        breakdown[bucket]["usd"] += sign * usd
     net_tokens = parts["bought"]["tokens"] + parts["transferred_in"]["tokens"] - parts["sold"]["tokens"] - parts["transferred_out"]["tokens"]
     net_usd = parts["bought"]["usd"] + parts["transferred_in"]["usd"] - parts["sold"]["usd"] - parts["transferred_out"]["usd"]
-    return {**parts, "net_tokens": net_tokens, "net_usd": net_usd, "usd_incomplete": usd_incomplete}
+    return {**parts, "breakdown": breakdown, "net_tokens": net_tokens, "net_usd": net_usd, "usd_incomplete": usd_incomplete}
+
+
+_REASON_TEXT = {
+    ("dex", 1): "mostly DEX buying",
+    ("dex", -1): "mostly DEX selling",
+    ("exchange", 1): "mostly exchange withdrawal",
+    ("exchange", -1): "mostly exchange deposit",
+    ("other_transfers", 1): "mostly other transfers in",
+    ("other_transfers", -1): "mostly other transfers out",
+}
+
+
+def flow_reason(breakdown: dict) -> tuple[str, str | None]:
+    """(short reason, dominant bucket) for a wallet's net flow: the part with the largest absolute size,
+    named "mostly ..." when it is at least half of all movement, otherwise "mixed". Sizes are compared in
+    USD (in tokens when there is no USD at all)."""
+    key = "usd" if any(abs(breakdown[b]["usd"]) > 0 for b in BUCKETS) else "tokens"
+    sizes = {b: breakdown[b][key] for b in BUCKETS}
+    total = sum(abs(v) for v in sizes.values())
+    if total == 0:
+        return "no net movement in the window", None
+    top = max(sizes, key=lambda b: abs(sizes[b]))
+    if abs(sizes[top]) / total < 0.5:
+        return "mixed: no single source dominates", None
+    return _REASON_TEXT[(top, 1 if sizes[top] > 0 else -1)], top
 
 
 # ---- 5. stance ----
@@ -220,7 +263,10 @@ def _window(now: float, days: int) -> tuple[str, str]:
     return (end - timedelta(days=days)).strftime(fmt), end.strftime(fmt)
 
 
-async def _analyze_whale(client, network: str, token: str, holder: dict, verdict: dict, price_usd: float | None, frm: str, to: str) -> dict:
+INCOMPLETE = "Incomplete data"
+
+
+async def _analyze_whale(client, network: str, token: str, holder: dict, verdict: dict, price_usd: float | None, frm: str, to: str, exchange_addresses=()) -> dict:
     balance = _f(holder.get("amount"), 0.0) or 0.0
     row = {
         "rank": holder.get("rank"),
@@ -241,26 +287,35 @@ async def _analyze_whale(client, network: str, token: str, holder: dict, verdict
     except PlanRestrictedError:
         raise
     except CoinGeckoError as e:
-        return {**row, "stance": None, "error": f"{type(e).__name__}: {str(e)[:120]}", "warnings": []}
+        return {**row, "stance": None, "stance_reason": None, "breakdown": None, "error": f"{type(e).__name__}: {str(e)[:120]}", "warnings": []}
     t_events, x_events = trade_events(trades, token), transfer_events(transfers, token)
     events, dropped = combine_events(t_events, x_events)
-    flow = compute_flow(events, price_usd)
+    flow = compute_flow(events, price_usd, exchange_addresses)
     st = stance_for(balance, flow["net_tokens"])
     warnings = []
     if st["warning"]:
         warnings.append(st["warning"])
-    truncated = len(trades) >= PER_PAGE * config.WHALE_MAX_PAGES or len(transfers) >= PER_PAGE * config.WHALE_MAX_PAGES
+    # A full last page means the wallet has more rows than we fetched: the flow is a partial number, so
+    # no stance is given and the wallet is kept out of the totals.
+    row_cap = PER_PAGE * config.WHALE_MAX_PAGES
+    truncated = len(trades) >= row_cap or len(transfers) >= row_cap
+    reason, dominant = flow_reason(flow["breakdown"])
     if truncated:
-        warnings.append("very active wallet: more rows than we fetched, so the flow may be incomplete")
+        st = {"stance": INCOMPLETE, "start_balance": None, "net_pct_of_start": None}
+        reason, dominant = "hit the page limit: flow is partial", None
+        warnings.append(f"hit the page limit ({row_cap} rows): stance not given and left out of the totals")
     if flow["usd_incomplete"]:
         warnings.append("no token price: USD for transfers is missing")
     return {
         **row,
         "stance": st["stance"],
+        "stance_reason": reason,
+        "dominant_flow": dominant,
         "start_balance": st["start_balance"],
         "net_flow_tokens": flow["net_tokens"],
         "net_flow_usd": flow["net_usd"],
         "net_flow_pct_of_start": st["net_pct_of_start"],
+        "breakdown": flow["breakdown"],
         "flows": {k: flow[k] for k in ("bought", "sold", "transferred_in", "transferred_out")},
         "trade_count": len(t_events),
         "transfer_count": len(x_events) - dropped,
@@ -343,8 +398,12 @@ async def scan(
         else:
             whales_in.append((h, verdict))
 
-    whales = await asyncio.gather(*(_analyze_whale(client, network, token, h, v, price_usd, frm, to) for h, v in whales_in))
-    ok = [w for w in whales if not w["error"]]
+    exchange_addresses = {e["address"].lower() for e in excluded if e["reason_code"] == "exchange_label"}
+    whales = await asyncio.gather(*(_analyze_whale(client, network, token, h, v, price_usd, frm, to, exchange_addresses) for h, v in whales_in))
+    incomplete = [w for w in whales if not w["error"] and w["stance"] == INCOMPLETE]
+    ok = [w for w in whales if not w["error"] and w["stance"] != INCOMPLETE]  # only these count toward totals
+    for w in incomplete:
+        warnings.append(f"Incomplete data: #{w['rank']} {w['short']} hit the page limit; its stance is not given and it is left out of the totals")
     count = lambda name: sum(1 for w in ok if w["stance"] == name)  # noqa: E731
     summary = {
         "holders_fetched": len(holder_rows),
@@ -354,9 +413,11 @@ async def scan(
         "accumulating": count("Accumulating"),
         "distributing": count("Distributing"),
         "holding": count("Holding"),
-        "errors": len(whales) - len(ok),
+        "incomplete": len(incomplete),
+        "errors": len(whales) - len(ok) - len(incomplete),
         "total_net_flow_tokens": sum(w["net_flow_tokens"] for w in ok),
         "total_net_flow_usd": sum(w["net_flow_usd"] for w in ok),
+        "totals": {b: {"tokens": sum(w["breakdown"][b]["tokens"] for w in ok), "usd": sum(w["breakdown"][b]["usd"] for w in ok)} for b in BUCKETS},
     }
     result = {
         "network": network,
