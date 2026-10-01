@@ -24,7 +24,7 @@ from core import wallets as w
 from core.articlekit import build as build_article_kit
 from core.assumptions import load as load_assumptions
 from core.assumptions import save as save_assumptions
-from core.client import CoinGeckoClient, CoinGeckoError, PlanRestrictedError
+from core.client import CoinGeckoClient, CoinGeckoError, PlanRestrictedError, WrongKeyTypeError
 from core.plan import locked, probe_capabilities
 from core.recorder import Recorder, list_fixtures, read_all
 from core.recorder import replay as replay_fixture
@@ -34,6 +34,7 @@ from core.store import Store
 from . import accumulation
 from . import backtest as backtest_mod
 from . import chains, config, profile, runs, scan, tokens, xray
+from .session_keys import COOKIE, KEY_RE, KeyVault
 from .follow import FollowEngine
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -54,6 +55,7 @@ state: dict = {
     "autopilot": None,
     "whale_scan_running": False,
 }
+vault = KeyVault()  # visitors' own API keys: memory only, see app/session_keys.py
 
 
 @asynccontextmanager
@@ -68,6 +70,7 @@ async def lifespan(app: FastAPI):
     if state.get("autopilot") and state["autopilot"].get("task"):
         state["autopilot"]["task"].cancel()
     state["store"].close()
+    await vault.close_all()
     await app.state.client.close()
 
 
@@ -305,6 +308,63 @@ async def api_trending(chain: str = config.DEFAULT_CHAIN, source: str = "trendin
 # ---------- Whales ----------
 
 
+def _has_env_key() -> bool:
+    return bool(config.core_config.API_KEY)
+
+
+async def _whale_client(request: Request) -> tuple[CoinGeckoClient | None, dict]:
+    """The client + plan caps for this request: the .env key if there is one, else the visitor's own key."""
+    if _has_env_key():
+        return app.state.client, caps()
+    entry = await vault.get(request.cookies.get(COOKIE))
+    return (entry["client"], entry["caps"]) if entry else (None, {})
+
+
+@app.get("/api/key/status")
+async def api_key_status(request: Request):
+    """Whether a key is in use and what its plan unlocks. Never contains the key itself."""
+    client, c = await _whale_client(request)
+    source = "env" if _has_env_key() else ("session" if client else None)
+    return {"has_key": client is not None, "source": source, "analyst": bool(c.get("analyst")), "upgrade_url": c.get("upgrade_url") or config.core_config.PRICING_URL}
+
+
+@app.post("/api/key")
+async def api_key_set(body: dict, request: Request):
+    """Keeps the visitor's own key in memory for this browser session only (a random session cookie)."""
+    if _has_env_key():
+        raise HTTPException(400, "This server already has a key in .env.")
+    key = str(body.get("key") or "").strip()
+    environment = str(body.get("environment") or "pro").strip().lower()
+    if environment not in ("pro", "demo"):
+        raise HTTPException(400, "Pick Pro or Demo.")
+    if not KEY_RE.match(key):
+        raise HTTPException(400, "That doesn't look like a CoinGecko API key.")
+    client = CoinGeckoClient(api_key=key, environment=environment)
+    try:
+        await client.key_usage()
+    except CoinGeckoError as e:
+        await client.close()
+        if e.status == 0:
+            raise HTTPException(502, "Could not reach CoinGecko. Try again.")
+        if isinstance(e, WrongKeyTypeError):
+            raise HTTPException(400, f"CoinGecko rejected the key. It may be a {'Demo' if environment == 'pro' else 'Pro'} key: try the other choice.")
+        raise HTTPException(400, "CoinGecko rejected the key. Check it and the Pro/Demo choice.")
+    key_caps = await probe_capabilities(client)
+    sid = await vault.put(request.cookies.get(COOKIE), client, key_caps)
+    resp = JSONResponse({"has_key": True, "source": "session", "analyst": key_caps["analyst"], "upgrade_url": key_caps["upgrade_url"]})
+    secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    resp.set_cookie(COOKIE, sid, httponly=True, samesite="lax", secure=secure, max_age=int(vault.ttl_s))
+    return resp
+
+
+@app.delete("/api/key")
+async def api_key_clear(request: Request):
+    await vault.drop(request.cookies.get(COOKIE))
+    resp = JSONResponse({"has_key": _has_env_key()})
+    resp.delete_cookie(COOKIE)
+    return resp
+
+
 @app.get("/api/whales/config")
 def api_whales_config():
     labels = config.core_config.CHAINS
@@ -331,10 +391,13 @@ def _whale_error(e: CoinGeckoError) -> JSONResponse:
 
 
 @app.post("/api/whales/scan")
-async def api_whales_scan(body: dict):
+async def api_whales_scan(body: dict, request: Request):
     """One whale accumulation scan: the token's top holders, who is buying, selling or locking. Saves a JSON file."""
-    if not caps().get("analyst"):
-        return locked("Whale scans use the top holders and wallet endpoints (Analyst plan or higher).", upgrade_url())
+    client, key_caps = await _whale_client(request)
+    if client is None:
+        raise HTTPException(401, "Add your CoinGecko API key first.")
+    if not key_caps.get("analyst"):
+        return locked("Whale scans use the top holders and wallet endpoints (Analyst plan or higher).", key_caps.get("upgrade_url") or upgrade_url())
     try:
         days = int(body.get("days", config.WHALE_WINDOW_DAYS[0]))
         holders = int(body.get("holders", config.WHALE_DEFAULT_HOLDERS))
@@ -345,7 +408,7 @@ async def api_whales_scan(body: dict):
     state["whale_scan_running"] = True
     t0 = time.perf_counter()
     try:
-        result = await accumulation.scan(app.state.client, str(body.get("network") or "").strip(), str(body.get("token") or "").strip(), days=days, holders=holders)
+        result = await accumulation.scan(client, str(body.get("network") or "").strip(), str(body.get("token") or "").strip(), days=days, holders=holders)
     except accumulation.WhaleScanInputError as e:
         raise HTTPException(400, str(e))
     except PlanRestrictedError:

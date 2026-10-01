@@ -1,0 +1,1965 @@
+{
+ "network": "base",
+ "token": "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b",
+ "symbol": "VIRTUAL",
+ "name": "Virtual Protocol",
+ "image_url": "https://coin-images.coingecko.com/coins/images/34057/large/LOGOMARK.png?1708356054",
+ "price_usd": 0.8171894478,
+ "market": {
+  "volume_24h_usd": 27937985.2828257,
+  "liquidity_usd": 26524196.482863132,
+  "volume_to_liquidity": 1.0533018521739572
+ },
+ "days": 30,
+ "window": {
+  "from": "2026-08-31T16:52",
+  "to": "2026-09-30T16:52"
+ },
+ "holders_requested": 50,
+ "summary": {
+  "holders_fetched": 50,
+  "whales": 27,
+  "excluded": 23,
+  "new_position": 1,
+  "accumulating": 4,
+  "distributing": 1,
+  "holding": 21,
+  "incomplete": 0,
+  "not_scanned": 0,
+  "errors": 0,
+  "total_net_flow_tokens": 6214350.643700449,
+  "total_net_flow_usd": 5078301.770961141,
+  "totals": {
+   "dex": {
+    "tokens": 0.0,
+    "usd": 0.0
+   },
+   "exchange": {
+    "tokens": 1229719.20841381,
+    "usd": 1004913.5608727345
+   },
+   "other_transfers": {
+    "tokens": 4984631.435286638,
+    "usd": 4073388.210088407
+   },
+   "locked_lp": {
+    "tokens": 0.0,
+    "usd": 0.0
+   }
+  }
+ },
+ "whales": [
+  {
+   "rank": 2,
+   "address": "0x06763d2b1acaef69f4378b73a0ca41ce79606a1f",
+   "short": "0x0676...6a1f",
+   "label": null,
+   "tags": [],
+   "supply_pct": 7.9064,
+   "balance": 39296675.21235505,
+   "balance_usd": 32112828.32,
+   "error": null,
+   "stance": "Accumulating",
+   "stance_reason": "mostly other transfers in",
+   "dominant_flow": "other_transfers",
+   "start_balance": 35662404.44595823,
+   "net_flow_tokens": 3634270.766396822,
+   "net_flow_usd": 2969887.7207474993,
+   "net_flow_pct_of_start": 10.190762016352796,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 3634270.766396822,
+     "usd": 2969887.7207474993
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 3634270.766396822,
+   "all_movement_usd": 2969887.7207474993,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 5863789.957854136,
+     "usd": 4791827.277674007
+    },
+    "transferred_out": {
+     "tokens": 2229519.1914573144,
+     "usd": 1821939.5569265054
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 874,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 4,
+   "address": "0x33e34b8684565fcf6a9dd52a7e92c4e70211a045",
+   "short": "0x33e3...a045",
+   "label": "xVIRTUAL (XVIRTUAL)",
+   "tags": [],
+   "supply_pct": 4.7403,
+   "balance": 23560304.382931255,
+   "balance_usd": 19253232.13,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 23560304.382931255,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 5,
+   "address": "0x60a203ddcde45fbfb325bdeea93824b5726b4df8",
+   "short": "0x60a2...4df8",
+   "label": "veVIRTUAL (VEVIRTUAL)",
+   "tags": [],
+   "supply_pct": 4.3389,
+   "balance": 21565086.123839594,
+   "balance_usd": 17622760.82,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "mostly other transfers out",
+   "dominant_flow": "other_transfers",
+   "start_balance": 21881689.022587594,
+   "net_flow_tokens": -316602.8987479987,
+   "net_flow_usd": -258724.54799975647,
+   "net_flow_pct_of_start": -1.4468851029789436,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": -316602.8987479987,
+     "usd": -258724.54799975647
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": -316602.8987479987,
+   "all_movement_usd": -258724.54799975647,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 231668.03746452247,
+     "usd": 189316.67560854292
+    },
+    "transferred_out": {
+     "tokens": 548270.9362125213,
+     "usd": 448041.2236082988
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 451,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 6,
+   "address": "0xbedaf4736c7bc4ec837b270956794804b51a8f15",
+   "short": "0xbeda...8f15",
+   "label": null,
+   "tags": [],
+   "supply_pct": 4.1957,
+   "balance": 20853301.937053,
+   "balance_usd": 17041098.3,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 20853301.937053,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 8,
+   "address": "0x06c7c71fca1aea63b8fbe5d6438ca6c681124711",
+   "short": "0x06c7...4711",
+   "label": null,
+   "tags": [],
+   "supply_pct": 3.1245,
+   "balance": 15529591.001670208,
+   "balance_usd": 12690617.9,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 15529591.001670208,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 9,
+   "address": "0x7fa57201a4f9efc20bf6a7d0dc54d058002a188d",
+   "short": "0x7fa5...188d",
+   "label": null,
+   "tags": [],
+   "supply_pct": 2.0523,
+   "balance": 10200476.217593035,
+   "balance_usd": 8335721.53,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 10200476.217593035,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 10,
+   "address": "0xfc6d3f69b4c8924fcbfa9fe582b73a50a8a09771",
+   "short": "0xfc6d...9771",
+   "label": null,
+   "tags": [],
+   "supply_pct": 2.0184,
+   "balance": 10031844.538099824,
+   "balance_usd": 8197917.5,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 10031844.538099824,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 18,
+   "address": "0x71aeae3a51292c7215673ada28bf16113e574ea5",
+   "short": "0x71ae...4ea5",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.9385,
+   "balance": 4664583.0,
+   "balance_usd": 3811848.01,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 4664583.0,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 19,
+   "address": "0xfead8b0b5aaaa70844cffc8674ee4797af4ebe34",
+   "short": "0xfead...be34",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.9105,
+   "balance": 4525140.195106268,
+   "balance_usd": 3697896.82,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 4525140.195106268,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 20,
+   "address": "0xda20895cfd5c35ad4bd5a54bc6741fe4d312542a",
+   "short": "0xda20...542a",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.7707,
+   "balance": 3830339.3158984026,
+   "balance_usd": 3130112.87,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 3830339.3158984026,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 21,
+   "address": "0x7b2df2b79b8d2979f17a051d52974bce9bb008f7",
+   "short": "0x7b2d...08f7",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.7042,
+   "balance": 3500050.0,
+   "balance_usd": 2860203.93,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 3500050.0,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 23,
+   "address": "0x30a320fe0062e29a4b2b2d94cc2770329b6dad64",
+   "short": "0x30a3...ad64",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.6608,
+   "balance": 3284499.8213650193,
+   "balance_usd": 2684058.6,
+   "error": null,
+   "stance": "Distributing",
+   "stance_reason": "mostly other transfers out",
+   "dominant_flow": "other_transfers",
+   "start_balance": 3616632.8333252724,
+   "net_flow_tokens": -332133.0119602531,
+   "net_flow_usd": -271415.59263995005,
+   "net_flow_pct_of_start": -9.183487162418896,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": -332133.0119602531,
+     "usd": -271415.59263995005
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": -332133.0119602531,
+   "all_movement_usd": -271415.59263995005,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 332133.0119602531,
+     "usd": 271415.59263995005
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 1,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 24,
+   "address": "0x5bd508d2c27e94031a81966d6a82bc093851c368",
+   "short": "0x5bd5...c368",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.6522,
+   "balance": 3241665.1160709998,
+   "balance_usd": 2649054.53,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 3241665.1160709998,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 25,
+   "address": "0x4c9af107e96139cdeb095143d8568c5b0c74b51a",
+   "short": "0x4c9a...b51a",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.6036,
+   "balance": 3000000.0,
+   "balance_usd": 2451568.34,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 3000000.0,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 28,
+   "address": "0xe3c2d3e83346092c563b33521ff8fe3d670ed66a",
+   "short": "0xe3c2...d66a",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.5706,
+   "balance": 2835883.342477795,
+   "balance_usd": 2317453.94,
+   "error": null,
+   "stance": "Accumulating",
+   "stance_reason": "mostly other transfers in",
+   "dominant_flow": "other_transfers",
+   "start_balance": 2374131.7529907557,
+   "net_flow_tokens": 461751.5894870395,
+   "net_flow_usd": 377338.526433686,
+   "net_flow_pct_of_start": 19.449282412627646,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 461751.5894870395,
+     "usd": 377338.526433686
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 461751.5894870395,
+   "all_movement_usd": 377338.526433686,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 461751.5894870395,
+     "usd": 377338.526433686
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 6,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 29,
+   "address": "0xa58d86a6be8aba2f8a28ac14d164bb1073642f02",
+   "short": "0xa58d...2f02",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.5475,
+   "balance": 2721027.594798,
+   "balance_usd": 2223595.04,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 2721027.594798,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 30,
+   "address": "0x86cbac9d9ac726f729eef6627dc4817bcbb03a9c",
+   "short": "0x86cb...3a9c",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.5415,
+   "balance": 2691333.8319848147,
+   "balance_usd": 2199329.61,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "mostly other transfers in",
+   "dominant_flow": "other_transfers",
+   "start_balance": 2691253.8319848147,
+   "net_flow_tokens": 80.0,
+   "net_flow_usd": 65.375155824,
+   "net_flow_pct_of_start": 0.0029725921445692676,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 80.0,
+     "usd": 65.375155824
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 80.0,
+   "all_movement_usd": 65.375155824,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 80.0,
+     "usd": 65.375155824
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 8,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 33,
+   "address": "0xa64f3acf2d411903d3db9cf88c468bbd55fe3e56",
+   "short": "0xa64f...3e56",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.503,
+   "balance": 2500000.0,
+   "balance_usd": 2042973.62,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 2500000.0,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 36,
+   "address": "0xe2dd490e1e6c8dc7362bdbc846bd2910a34ec66f",
+   "short": "0xe2dd...c66f",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.4695,
+   "balance": 2333333.0,
+   "balance_usd": 1906775.11,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 2333333.0,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 37,
+   "address": "0xe5468fb6dd591b22653d399ade99178a4e93645a",
+   "short": "0xe546...645a",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.4358,
+   "balance": 2165796.3985526925,
+   "balance_usd": 1769865.96,
+   "error": null,
+   "stance": "New position",
+   "stance_reason": "mostly other transfers in",
+   "dominant_flow": "other_transfers",
+   "start_balance": 4.656612873077393e-10,
+   "net_flow_tokens": 2165796.398552692,
+   "net_flow_usd": 1769865.9629805034,
+   "net_flow_pct_of_start": null,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 2165796.398552692,
+     "usd": 1769865.9629805034
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 2165796.398552692,
+   "all_movement_usd": 1769865.9629805034,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 2165796.398552692,
+     "usd": 1769865.9629805034
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 20,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 38,
+   "address": "0xf1942a9b1b0037a20350358c9fe9ffd96821c685",
+   "short": "0xf194...c685",
+   "label": "AgentReward (Proxy)",
+   "tags": [],
+   "supply_pct": 0.4316,
+   "balance": 2145074.065388428,
+   "balance_usd": 1752931.89,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 2145074.065388428,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 39,
+   "address": "0x749b898e5b523f08e9e371d259e0409c19ae8454",
+   "short": "0x749b...8454",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.4293,
+   "balance": 2133676.0669071986,
+   "balance_usd": 1743617.57,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "mostly other transfers in",
+   "dominant_flow": "other_transfers",
+   "start_balance": 2119189.8094534366,
+   "net_flow_tokens": 14486.257453762173,
+   "net_flow_usd": 11838.016729328487,
+   "net_flow_pct_of_start": 0.683575269621476,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 14486.257453762173,
+     "usd": 11838.016729328487
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 14486.257453762173,
+   "all_movement_usd": 11838.016729328487,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 1289826.7308421968,
+     "usd": 1054032.7939346167
+    },
+    "transferred_out": {
+     "tokens": 1275340.4733884363,
+     "usd": 1042194.777205287
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 461,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 40,
+   "address": "0x0235ffde3d40e0224617e201499d508751edfb8d",
+   "short": "0x0235...fb8d",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.3967,
+   "balance": 1971699.0540677258,
+   "balance_usd": 1611251.66,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 1971699.0540677258,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 42,
+   "address": "0xc0628ebf46975d535e696bac600b81d19a390581",
+   "short": "0xc062...0581",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.3518,
+   "balance": 1748743.4201800001,
+   "balance_usd": 1429054.67,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 1748743.4201800001,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 44,
+   "address": "0x98adef6f2ac8572ec48965509d69a8dd5e8bba9d",
+   "short": "0x98ad...ba9d",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.3048,
+   "balance": 1515080.5218571327,
+   "balance_usd": 1238107.82,
+   "error": null,
+   "stance": "Accumulating",
+   "stance_reason": "mostly exchange withdrawal",
+   "dominant_flow": "exchange",
+   "start_balance": 1169674.7882486023,
+   "net_flow_tokens": 345405.7336085305,
+   "net_flow_usd": 282261.92071450886,
+   "net_flow_pct_of_start": 29.530065713882692,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 1229719.20841381,
+     "usd": 1004913.5608727345
+    },
+    "other_transfers": {
+     "tokens": -884313.4748052795,
+     "usd": -722651.6401582257
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 345405.7336085305,
+   "all_movement_usd": 282261.92071450886,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 1229719.2092763002,
+     "usd": 1004913.5615775525
+    },
+    "transferred_out": {
+     "tokens": 884313.47566777,
+     "usd": 722651.6408630436
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 30,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 47,
+   "address": "0x301f742573c76ee107cb8e263f2d5c009ecbfb28",
+   "short": "0x301f...fb28",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.2834,
+   "balance": 1408712.11820063,
+   "balance_usd": 1151184.68,
+   "error": null,
+   "stance": "Holding",
+   "stance_reason": "no net movement in the window",
+   "dominant_flow": null,
+   "start_balance": 1408712.11820063,
+   "net_flow_tokens": 0.0,
+   "net_flow_usd": 0.0,
+   "net_flow_pct_of_start": 0.0,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 0.0,
+   "all_movement_usd": 0.0,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 0,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  },
+  {
+   "rank": 49,
+   "address": "0x416ec2ca21a38cbcfeacd6a14532b3f348356d23",
+   "short": "0x416e...6d23",
+   "label": null,
+   "tags": [],
+   "supply_pct": 0.267,
+   "balance": 1326821.6578003545,
+   "balance_usd": 1084264.66,
+   "error": null,
+   "stance": "Accumulating",
+   "stance_reason": "mostly other transfers in",
+   "dominant_flow": "other_transfers",
+   "start_balance": 1085525.8488905004,
+   "net_flow_tokens": 241295.8089098541,
+   "net_flow_usd": 197184.38883949802,
+   "net_flow_pct_of_start": 22.22847195729875,
+   "breakdown": {
+    "dex": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "exchange": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "other_transfers": {
+     "tokens": 241295.8089098541,
+     "usd": 197184.38883949802
+    },
+    "locked_lp": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "locked_lp_targets": [],
+   "all_movement_tokens": 241295.8089098541,
+   "all_movement_usd": 197184.38883949802,
+   "flows": {
+    "bought": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "sold": {
+     "tokens": 0.0,
+     "usd": 0.0
+    },
+    "transferred_in": {
+     "tokens": 241295.8089098541,
+     "usd": 197184.38883949802
+    },
+    "transferred_out": {
+     "tokens": 0.0,
+     "usd": 0.0
+    }
+   },
+   "trade_count": 0,
+   "transfer_count": 49,
+   "duplicate_transfers_dropped": 0,
+   "truncated": false,
+   "warnings": []
+  }
+ ],
+ "excluded": [
+  {
+   "rank": 1,
+   "address": "0x501ced8dfec4dcb6836b7bc0241ab1c3a93ec434",
+   "short": "0x501c...c434",
+   "label": "Cold Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Cold Wallet\" matches exchange keyword \"Cold Wallet\"",
+   "supply_pct": 8.3417,
+   "balance_usd": 33880805.53
+  },
+  {
+   "rank": 3,
+   "address": "0x582717501dec047513ec258458da7834011076de",
+   "short": "0x5827...76de",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 6.8579,
+   "balance_usd": 27854096.02
+  },
+  {
+   "rank": 7,
+   "address": "0xbaed383ede0e5d9d72430661f3285daa77e9439f",
+   "short": "0xbaed...439f",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 3.4,
+   "balance_usd": 13809602.56
+  },
+  {
+   "rank": 11,
+   "address": "0x3304e22ddaa22bcdc5fca2269b418046ae7b566a",
+   "short": "0x3304...566a",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 1.7388,
+   "balance_usd": 7062262.26
+  },
+  {
+   "rank": 12,
+   "address": "0xf977814e90da44bfa03b6295a0616a897441acec",
+   "short": "0xf977...acec",
+   "label": "Cold Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Cold Wallet\" matches exchange keyword \"Cold Wallet\"",
+   "supply_pct": 1.4068,
+   "balance_usd": 5713691.85
+  },
+  {
+   "rank": 13,
+   "address": "0x4e3ae00e8323558fa5cac04b152238924aa31b60",
+   "short": "0x4e3a...1b60",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 1.2803,
+   "balance_usd": 5199984.29
+  },
+  {
+   "rank": 14,
+   "address": "0x841ed663f2636863d40be4ee76243377dff13a34",
+   "short": "0x841e...3a34",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 1.1857,
+   "balance_usd": 4816011.98
+  },
+  {
+   "rank": 15,
+   "address": "0xffa8db7b38579e6a2d14f9b347a9ace4d044cd54",
+   "short": "0xffa8...cd54",
+   "label": "Cold Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Cold Wallet\" matches exchange keyword \"Cold Wallet\"",
+   "supply_pct": 1.0298,
+   "balance_usd": 4182510.57
+  },
+  {
+   "rank": 16,
+   "address": "0xb0a3a2b60e969afd26561429aa4c1444c57e4411",
+   "short": "0xb0a3...4411",
+   "label": "Cold Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Cold Wallet\" matches exchange keyword \"Cold Wallet\"",
+   "supply_pct": 1.0242,
+   "balance_usd": 4159922.09
+  },
+  {
+   "rank": 17,
+   "address": "0x0529ea5885702715e83923c59746ae8734c553b7",
+   "short": "0x0529...53b7",
+   "label": "Cold Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Cold Wallet\" matches exchange keyword \"Cold Wallet\"",
+   "supply_pct": 0.9395,
+   "balance_usd": 3815835.64
+  },
+  {
+   "rank": 22,
+   "address": "0xb7333d779c6ecdfc4507a53706b0e173bd086a18",
+   "short": "0xb733...6a18",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 0.6862,
+   "balance_usd": 2787156.9
+  },
+  {
+   "rank": 26,
+   "address": "0xc882b111a75c0c657fc507c04fbfcd2cc984f071",
+   "short": "0xc882...f071",
+   "label": "Cold Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Cold Wallet\" matches exchange keyword \"Cold Wallet\"",
+   "supply_pct": 0.6028,
+   "balance_usd": 2448362.96
+  },
+  {
+   "rank": 27,
+   "address": "0x21594b992f68495dd28d605834b58889d0a727c7",
+   "short": "0x2159...27c7",
+   "label": "Volatile AMM - VIRTUAL/WETH (VAMM-VIRTUAL/WETH)",
+   "reason_code": "contract_label",
+   "reason": "label \"Volatile AMM - VIRTUAL/WETH (VAMM-VIRTUAL/WETH)\" matches contract keyword \"AMM\"",
+   "supply_pct": 0.5776,
+   "balance_usd": 2345859.38
+  },
+  {
+   "rank": 31,
+   "address": "0x611f7bf868a6212f871e89f7e44684045ddfb09d",
+   "short": "0x611f...b09d",
+   "label": "Cold Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Cold Wallet\" matches exchange keyword \"Cold Wallet\"",
+   "supply_pct": 0.5198,
+   "balance_usd": 2111209.42
+  },
+  {
+   "rank": 32,
+   "address": "0x2677c4c8757da1857cc7cc4071e0e0dd32ccb975",
+   "short": "0x2677...b975",
+   "label": "Cold Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Cold Wallet\" matches exchange keyword \"Cold Wallet\"",
+   "supply_pct": 0.5093,
+   "balance_usd": 2068436.47
+  },
+  {
+   "rank": 34,
+   "address": "0xd3e0341b361134014e0c89378b3e36bc5020cd97",
+   "short": "0xd3e0...cd97",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 0.4882,
+   "balance_usd": 1982898.71
+  },
+  {
+   "rank": 35,
+   "address": "0x0c3b466104545efa096b8f944c1e524e1d0d4888",
+   "short": "0x0c3b...4888",
+   "label": "V2 Pool",
+   "reason_code": "liquidity_pool",
+   "reason": "one of this token's liquidity pools",
+   "supply_pct": 0.4785,
+   "balance_usd": 1943630.12
+  },
+  {
+   "rank": 41,
+   "address": "0x1887fa9edadeab7562b01cc3f4fa246ace2c3cdd",
+   "short": "0x1887...3cdd",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 0.369,
+   "balance_usd": 1498826.16
+  },
+  {
+   "rank": 43,
+   "address": "0xd418dfe7670c21f682e041f34250c114db5d7789",
+   "short": "0xd418...7789",
+   "label": "V2 Pool",
+   "reason_code": "contract_label",
+   "reason": "label \"V2 Pool\" matches contract keyword \"Pool\"",
+   "supply_pct": 0.3135,
+   "balance_usd": 1273422.98
+  },
+  {
+   "rank": 45,
+   "address": "0x0d0707963952f2fba59dd06f2b425ace40b492fe",
+   "short": "0x0d07...92fe",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 0.3019,
+   "balance_usd": 1226086.01
+  },
+  {
+   "rank": 46,
+   "address": "0x41f8627188b03f52dfc112738dff4e4dbce4335a",
+   "short": "0x41f8...335a",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 0.2963,
+   "balance_usd": 1203296.33
+  },
+  {
+   "rank": 48,
+   "address": "0x846a268268e4b561763e042b0e8e237bccf734f3",
+   "short": "0x846a...34f3",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 0.2744,
+   "balance_usd": 1114575.56
+  },
+  {
+   "rank": 50,
+   "address": "0x0db6ffb36e26958cfa53cbe6d767f3cc7ba595d7",
+   "short": "0x0db6...95d7",
+   "label": "Hot Wallet",
+   "reason_code": "exchange_label",
+   "reason": "label \"Hot Wallet\" matches exchange keyword \"Hot Wallet\"",
+   "supply_pct": 0.2618,
+   "balance_usd": 1063516.15
+  }
+ ],
+ "warnings": [
+  "Only current top holders are listed: a whale that sold everything during the window is not shown.",
+  "The starting balance is estimated as current balance minus net flow; USD for plain transfers uses today's price."
+ ],
+ "credits": 60,
+ "scanned_at": "2026-09-30T16:52:37.697267+00:00"
+}

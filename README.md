@@ -5,6 +5,18 @@
 
 # Whale Accumulation Tracker
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Tanaka686/whale-accumulation-tracker)
+
+**Try it with nothing to install:**
+
+1. Click **Open in GitHub Codespaces** above (you need a free GitHub account), then **Create codespace**.
+2. Wait 1-2 minutes. It installs everything and starts the app by itself; your browser opens the app on port 8000. (If it doesn't, open the **Ports** tab and click the globe next to 8000.)
+3. In the **Whales** tab, paste your own CoinGecko API key, pick **Pro** or **Demo**, and scan a token. The holder and wallet endpoints need the **Analyst** plan or higher ([get a key](https://www.coingecko.com/en/api?utm_source=github&utm_content=tanaka_l2)).
+
+Your pasted key stays in the app's memory for that browser session only: it is never saved to disk, logged or sent back. Prefer to skip the paste box? Add `COINGECKO_API_KEY` (and `COINGECKO_ENVIRONMENT`) as a [Codespaces secret](https://docs.github.com/en/codespaces/managing-your-codespaces/managing-your-account-specific-secrets-for-github-codespaces).
+
+Just want to look first? The read-only [`demo/`](demo) folder is a static snapshot (no server, no key) that deploys to Vercel; see [Static demo](#static-demo).
+
 Paste a token contract and see whether its biggest holders are **buying, selling or just holding** over the last 7 or 30 days.
 
 The tracker reads a token's top holders, sets aside exchanges, contracts and pools, then follows what each remaining whale did with the token: DEX trades, exchange withdrawals, other transfers, and tokens moved in and out of locks and LPs. Every whale gets a stance (Accumulating, New position, Holding, Distributing) and a plain-English reason, and each scan is saved as a JSON file.
@@ -153,6 +165,12 @@ Open <http://127.0.0.1:8000> and press **Ctrl+C** to stop.
 ### Your API key
 
 `.env` holds `COINGECKO_API_KEY=` and `COINGECKO_ENVIRONMENT=pro` (use `demo` only for a Demo key, which cannot run whale scans). `.env` is in `.gitignore`: never commit it. The key is read on the server only; it is not sent to the browser and it is not printed or logged.
+
+No `.env` key? The Whales tab shows a box where a visitor pastes their own key instead (Pro or Demo). It is checked once with CoinGecko, kept only in the server's memory against a random session cookie (idle sessions expire after 2 hours), and never written to disk, logged or returned by any API. If `.env` has a key, that key is used and the box is hidden.
+
+### Static demo
+
+`demo/` is a read-only copy of the Whales dashboard that loads one saved scan (`demo/scan.json`, VIRTUAL 30d). No server, no API key, no build step. `vercel.json` makes Vercel serve only that folder. To refresh it with a newer scan: `uv run python scripts/build_demo.py [path/to/scan.json]`, then commit `demo/`. The script strips the saved file path and refuses to write a scan that contains anything that looks like a key or a local path.
 
 ### Run the tests
 

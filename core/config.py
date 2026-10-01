@@ -24,6 +24,15 @@ else:
     BASE_URL = "https://pro-api.coingecko.com/api/v3"
     KEY_HEADER = "x-cg-pro-api-key"
 
+
+
+def endpoint_for(environment: str) -> tuple[str, str]:
+    """(base_url, key_header) for "pro" or "demo"; anything else is treated as pro."""
+    if (environment or "").strip().lower() == "demo":
+        return "https://api.coingecko.com/api/v3", "x-cg-demo-api-key"
+    return "https://pro-api.coingecko.com/api/v3", "x-cg-pro-api-key"
+
+
 WS_URL = "wss://stream.coingecko.com/v1?x_cg_pro_api_key={key}"
 PRICING_URL = "https://www.coingecko.com/en/api/pricing"
 API_URL = "https://www.coingecko.com/en/api"

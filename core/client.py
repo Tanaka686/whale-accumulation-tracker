@@ -82,10 +82,12 @@ def _cache_key(path: str, params: dict | None) -> str:
 class CoinGeckoClient:
     """Plain async httpx client for every CoinGecko REST endpoint the starter repos use."""
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, api_key: str | None = None, base_url: str | None = None, transport: httpx.AsyncBaseTransport | None = None, environment: str | None = None):
+        # `environment` ("pro" | "demo") picks the host and header for a key that isn't the .env one.
+        env_base, env_header = config.endpoint_for(environment) if environment else (config.BASE_URL, config.KEY_HEADER)
         self._client = httpx.AsyncClient(
-            base_url=base_url or config.BASE_URL,
-            headers={config.KEY_HEADER: api_key or config.API_KEY, "accept": "application/json"},
+            base_url=base_url or env_base,
+            headers={env_header: api_key or config.API_KEY, "accept": "application/json"},
             timeout=30,
             transport=transport,
         )
